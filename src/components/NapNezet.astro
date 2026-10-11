@@ -4,6 +4,7 @@ import Osszkep from './Osszkep.astro';
 import HetFigyelmeztetes from './HetFigyelmeztetes.astro';
 import Kulcsszintek from './Kulcsszintek.astro';
 import Forgatokonyvek from './Forgatokonyvek.astro';
+import MeretKalkulator from './MeretKalkulator.astro';
 import Checklist from './Checklist.astro';
 import Szakaszok from './Szakaszok.astro';
 
@@ -16,8 +17,21 @@ const { elemzes } = Astro.props;
 <div class="grid grid-cols-1 gap-4">
   <Osszkep elemzes={elemzes} />
   <HetFigyelmeztetes elemek={elemzes.hetFigyelmeztetes} />
-  <Kulcsszintek szintek={elemzes.kulcsszintek} riasztasok={elemzes.riasztasok} />
+  <Kulcsszintek azon={elemzes.id} szintek={elemzes.kulcsszintek} riasztasok={elemzes.riasztasok} />
   <Forgatokonyvek lista={elemzes.forgatokonyvek} />
+  <MeretKalkulator azon={elemzes.id} terv={elemzes.tradeTerv} />
   <Checklist elemek={elemzes.checklist} />
   <Szakaszok elemzes={elemzes} />
+  {
+    elemzes.figyelmeztetesek.length > 0 && (
+      <aside class="rounded-xl border border-dashed border-line px-4 py-3 text-xs text-muted">
+        <p class="font-medium">Ebből a fájlból nem sikerült kiolvasni:</p>
+        <ul class="mt-1 list-disc pl-4">
+          {elemzes.figyelmeztetesek.map((f) => (
+            <li>{f}</li>
+          ))}
+        </ul>
+      </aside>
+    )
+  }
 </div>

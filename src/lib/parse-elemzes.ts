@@ -5,6 +5,9 @@
  * és a hozzá tartozó blokk egyszerűen nem jelenik meg. Ha van frontmatter, az elsőbbséget kap.
  */
 import { renderInline, renderMarkdown } from './markdown';
+import { SZAM_RE, szamErtek } from './szam';
+
+export { szamErtek };
 
 export type Tonus = 'zold' | 'piros' | 'sarga' | 'semleges';
 
@@ -60,6 +63,29 @@ export interface Szakasz {
   html: string;
 }
 
+export interface TradeTerv {
+  /** Entry ár eredeti formában, pl. „31 480,0”. */
+  entry: string | null;
+  entryErtek: number | null;
+  stopPont: number | null;
+  tpPont: number | null;
+}
+
+export interface Trade {
+  irany: string;
+  entry: string;
+  sl: string;
+  tp: string;
+  meret: string;
+  /** Az Eredmény cella eredeti szövege. */
+  eredmeny: string;
+  usd: number | null;
+  r: number | null;
+  /** true = igen, false = nem, null = nincs kitöltve */
+  szabaly: boolean | null;
+  tanulsag: string;
+}
+
 export interface Elemzes {
   /** Fájlnév kiterjesztés nélkül, pl. `2026-10-12-elokeszito`. */
   id: string;
@@ -75,16 +101,18 @@ export interface Elemzes {
   hetFigyelmeztetes: string[];
   forgatokonyvek: Forgatokonyv[];
   checklist: ChecklistElem[];
+  tradeTerv: TradeTerv | null;
+  naplo: Trade[];
+  erzelmiAllapot: string | null;
   bevezetoHtml: string | null;
   szakaszok: Szakasz[];
+  /** Szakaszok, amelyek megvannak, de nem sikerült belőlük kiolvasni a várt adatot. */
+  figyelmeztetesek: string[];
 }
 
 export const ALAP_ABLAK = '15:45–17:30';
 
 const FAJLNEV_RE = /^(\d{4})-(\d{2})-(\d{2})(?:-(.+?))?(?:\.md)?$/i;
-
-/** Magyar formátumú szám: szóköz / nbsp ezres elválasztó, tizedesvessző. */
-const SZAM_RE = /\d{1,3}(?:[   ]\d{3})+(?:,\d+)?|\d+(?:,\d+)?/g;
 
 export function fajlnevbol(fajlnev: string): { datum: string; slug: string } | null {
   const alap = fajlnev.split(/[\\/]/).pop() ?? fajlnev;
@@ -94,14 +122,6 @@ export function fajlnevbol(fajlnev: string): { datum: string; slug: string } | n
   const d = new Date(Date.UTC(+ev, +ho - 1, +nap));
   if (d.getUTCMonth() !== +ho - 1 || d.getUTCDate() !== +nap) return null;
   return { datum: `${ev}-${ho}-${nap}`, slug: slug ?? '' };
-}
-
-/** „31 616,5” → 31616.5 */
-export function szamErtek(szoveg: string): number | null {
-  const m = szoveg.match(SZAM_RE);
-  if (!m) return null;
-  const n = Number(m[0].replace(/[   ]/g, '').replace(',', '.'));
-  return Number.isFinite(n) ? n : null;
 }
 
 function boldTorles(s: string): string {
@@ -404,6 +424,91 @@ function ablak(md: string): string {
   return m ? `${m[1]}–${m[2]}` : ALAP_ABLAK;
 }
 
+// ---------- trade terv (5.) és napló (8.) ----------
+
+/** Előjeles magyar szám: „+1,8”, „−1”, „-0,5” → szám. A unicode mínuszt (−) és a gondolatjelet (–) is kezeli. */
+export function elojelesSzam(szoveg: string): number | null {
+  const m = szoveg.match(/([+\-−–])?\s*(\d{1,3}(?:[   ]\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)/);
+  if (!m) return null;
+  const n = Number(m[2].replace(/[   ]/g, '').replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  return m[1] && m[1] !== '+' ? -n : n;
+}
+
+/** „+1,8 USD / +2R” → { usd: 1.8, r: 2 }; „BE” → 0 / 0. */
+export function eredmenyBol(szoveg: string): { usd: number | null; r: number | null } {
+  const s = boldTorles(szoveg);
+  if (/^\s*(BE|break\s*even|nullszaldó|0)\s*$/i.test(s)) return { usd: 0, r: 0 };
+  const usdM = s.match(/([+\-−–]?\s*\d[\d   ]*(?:[.,]\d+)?)\s*(?:USD|\$)/i) ?? s.match(/\$\s*([+\-−–]?\s*\d+(?:[.,]\d+)?)/);
+  const rM = s.match(/([+\-−–]?\s*\d+(?:[.,]\d+)?)\s*R\b/);
+  return { usd: usdM ? elojelesSzam(usdM[1]) : null, r: rM ? elojelesSzam(rM[1]) : null };
+}
+
+function tablaOszlop(fejlec: string[], re: RegExp): number {
+  return fejlec.findIndex((f) => re.test(boldTorles(f)));
+}
+
+function tradeTerv(md: string): TradeTerv | null {
+  const t = elsoTablazat(md);
+  if (!t) return null;
+  const sor = (re: RegExp) => boldTorles(t.sorok.find((s) => re.test(boldTorles(s[0] ?? '')))?.[1] ?? '');
+  const pontResz = (cella: string): number | null => {
+    if (!cella) return null;
+    const reszek = cella.split('/');
+    if (reszek.length > 1) return szamErtek(reszek[1]);
+    const n = szamErtek(cella);
+    return n !== null && n < 1000 ? n : null; // egyetlen kis szám: pont
+  };
+  const entry = sor(/^entry/i);
+  const terv: TradeTerv = {
+    entry: entry && /\d/.test(entry) ? entry : null,
+    entryErtek: entry ? szamErtek(entry) : null,
+    stopPont: pontResz(sor(/^stop\s*loss|^SL\b/i)),
+    tpPont: pontResz(sor(/^take\s*profit|^TP\b/i)),
+  };
+  return terv.entry || terv.stopPont ? terv : null;
+}
+
+function naplo(md: string): Trade[] {
+  const t = elsoTablazat(md);
+  if (!t) return [];
+  const i = {
+    irany: tablaOszlop(t.fejlec, /^irány/i),
+    entry: tablaOszlop(t.fejlec, /^entry/i),
+    sl: tablaOszlop(t.fejlec, /^SL\b|^stop/i),
+    tp: tablaOszlop(t.fejlec, /^TP\b|^take/i),
+    meret: tablaOszlop(t.fejlec, /^méret/i),
+    eredmeny: tablaOszlop(t.fejlec, /^eredmény/i),
+    szabaly: tablaOszlop(t.fejlec, /szabály/i),
+    tanulsag: tablaOszlop(t.fejlec, /^tanulság/i),
+  };
+  if (i.irany < 0) return [];
+  const cella = (s: string[], idx: number) => (idx >= 0 ? boldTorles(s[idx] ?? '') : '');
+  return t.sorok
+    .filter((s) => cella(s, i.irany) !== '')
+    .map((s) => {
+      const eredmeny = cella(s, i.eredmeny);
+      const szabaly = cella(s, i.szabaly);
+      return {
+        irany: cella(s, i.irany),
+        entry: cella(s, i.entry),
+        sl: cella(s, i.sl),
+        tp: cella(s, i.tp),
+        meret: cella(s, i.meret),
+        eredmeny,
+        ...eredmenyBol(eredmeny),
+        szabaly: /^(igen|i|yes|✓|✔|x)\b/i.test(szabaly) ? true : /^(nem|n|no|✗|✕)\b/i.test(szabaly) ? false : null,
+        tanulsag: cella(s, i.tanulsag),
+      };
+    });
+}
+
+function erzelmiAllapot(md: string): string | null {
+  const m = md.match(/Érzelmi állapot[^:\n]*:\s*(.+)$/im);
+  const v = m ? boldTorles(m[1]) : '';
+  return v && !/^_+$/.test(v) ? v : null;
+}
+
 // ---------- fő függvény ----------
 
 /**
@@ -425,8 +530,10 @@ export function parseElemzes(fajlnev: string, tartalom: string, frontmatter: Rec
   const sz1 = keresSzakasz(nyers, 1, /HTF|magasabb idősík|irány/i);
   const sz2 = keresSzakasz(nyers, 2, /kulcsszint|szintek/i);
   const sz3 = keresSzakasz(nyers, 3, /forgatókönyv/i);
+  const sz5 = keresSzakasz(nyers, 5, /trade\s*terv/i);
   const sz6 = keresSzakasz(nyers, 6, /checklist|ellenőrzőlista/i);
   const sz7 = keresSzakasz(nyers, 7, /döntés/i);
+  const sz8 = keresSzakasz(nyers, 8, /napló/i);
 
   const eloszuresSor =
     cimkesSor(sz0?.md ?? '', /Előszűrés(?:\s+eredménye)?/) ?? cimkesSor(teljes, /Előszűrés(?:\s+eredménye)?/);
@@ -439,7 +546,7 @@ export function parseElemzes(fajlnev: string, tartalom: string, frontmatter: Rec
   const celok = forgatokonyvSorArai(szakaszMd, /^\s*[-*]\s*\**\s*Cél/i);
   const ervenytelenek = forgatokonyvSorArai(szakaszMd, /^\s*[-*]\s*\**\s*Érvénytelen/i);
 
-  return {
+  const eredmeny: Omit<Elemzes, 'figyelmeztetesek'> = {
     id: `${nev.datum}${nev.slug ? `-${nev.slug}` : ''}`,
     datum: nev.datum,
     slug: nev.slug,
@@ -453,7 +560,24 @@ export function parseElemzes(fajlnev: string, tartalom: string, frontmatter: Rec
     hetFigyelmeztetes: hetFigyelmeztetes(teljes),
     forgatokonyvek: sz3 ? forgatokonyvek(sz3.md) : [],
     checklist: checklist(sz6?.md ?? '').length ? checklist(sz6?.md ?? '') : checklist(teljes),
+    tradeTerv: sz5 ? tradeTerv(sz5.md) : null,
+    naplo: sz8 ? naplo(sz8.md) : [],
+    erzelmiAllapot: sz8 ? erzelmiAllapot(sz8.md) : null,
     bevezetoHtml: bevezeto ? renderMarkdown(bevezeto) : null,
     szakaszok: nyers.map((s) => ({ ...s, html: renderMarkdown(s.md) })),
   };
+
+  // Ellenőrzés: csak az a szakasz számít hibának, amely megvan, de nem olvasható ki belőle a várt adat.
+  // (Egy rövid frissítő fájl, amelyből szándékosan hiányoznak szakaszok, nem kap figyelmeztetést.)
+  const figyelmeztetesek: string[] = [];
+  if (sz0 && !eredmeny.eloszures) figyelmeztetesek.push('Előszűrés (várt: **Előszűrés: ZÖLD** vagy PIROS)');
+  if (sz1 && !eredmeny.bias) figyelmeztetesek.push('HTF bias (várt: **HTF bias: LONG / SHORT / SEMLEGES**)');
+  if (sz2 && eredmeny.kulcsszintek.length === 0) figyelmeztetesek.push('Kulcsszintek (várt: Szint | Ár | Megjegyzés táblázat kitöltött árakkal)');
+  if (sz3 && eredmeny.forgatokonyvek.length === 0) figyelmeztetesek.push('Forgatókönyvek (várt: **A) …**, **B) …** blokkok)');
+  if (sz6 && eredmeny.checklist.length === 0) figyelmeztetesek.push('Checklist (várt: - [x] / - [ ] sorok)');
+  if (sz7 && !eredmeny.dontes) figyelmeztetesek.push('Döntés (várt: **VAN SETUP** / **NINCS SETUP** félkövéren)');
+  const olvashatatlan = eredmeny.naplo.filter((t) => t.eredmeny && t.usd === null && t.r === null).length;
+  if (olvashatatlan) figyelmeztetesek.push(`Napló: ${olvashatatlan} trade eredménye nem olvasható (várt: +1,8 USD / +2R)`);
+
+  return { ...eredmeny, figyelmeztetesek };
 }

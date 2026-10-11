@@ -1,0 +1,106 @@
+---
+import type { TradeTerv } from '../lib/parse-elemzes';
+import { KERETEK } from '../lib/beallitasok';
+import { huSzam } from '../lib/szam';
+
+interface Props {
+  azon: string;
+  /** Előtöltés az 5. Trade terv táblázatból. */
+  terv?: TradeTerv | null;
+}
+const { azon, terv = null } = Astro.props;
+const mezo =
+  'mt-1 block min-h-11 w-full rounded-xl border border-line bg-panel-2 px-3 font-mono text-base text-fg placeholder:text-muted/60 placeholder:font-sans placeholder:text-sm focus:border-accent';
+const cimke = 'text-xs font-medium uppercase tracking-wider text-muted';
+---
+
+<section class="card" aria-label="Méretkalkulátor" data-kalkulator>
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h2 class="font-semibold">Méretkalkulátor</h2>
+    <p class="text-xs text-muted">
+      {huSzam(KERETEK.kockazatUsd, 0)} USD / (stop + {huSzam(KERETEK.spreadPont, 1)}) · plafon {huSzam(KERETEK.meretPlafon, 3)}
+    </p>
+  </div>
+
+  <div class="mt-3 grid grid-cols-[1fr_1fr_1.5fr] gap-2">
+    <label class={cimke} for={`stop-${azon}`}>
+      Stop (pt)
+      <input id={`stop-${azon}`} data-k="stop" type="text" inputmode="decimal" autocomplete="off" placeholder="pl. 40" value={terv?.stopPont != null ? String(terv.stopPont).replace('.', ',') : ''} class={mezo} />
+    </label>
+    <label class={cimke} for={`tp-${azon}`}>
+      TP (pt)
+      <input id={`tp-${azon}`} data-k="tp" type="text" inputmode="decimal" autocomplete="off" placeholder="pl. 80" value={terv?.tpPont != null ? String(terv.tpPont).replace('.', ',') : ''} class={mezo} />
+    </label>
+    <label class={cimke} for={`entry-${azon}`}>
+      Entry
+      <input id={`entry-${azon}`} data-k="entry" type="text" inputmode="decimal" autocomplete="off" placeholder="pl. 31 480" value={terv?.entry ?? ''} class={mezo} />
+    </label>
+  </div>
+
+  <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite">
+    <button
+      type="button"
+      data-eredmeny="meret"
+      class="col-span-2 flex min-h-14 items-center justify-between rounded-xl border border-line bg-panel-2 px-3 text-left sm:col-span-1 sm:flex-col sm:items-start sm:justify-center"
+      aria-label="Méret másolása"
+    >
+      <span class={cimke}>Méret</span>
+      <span data-ertek-ki class="font-mono text-xl font-bold">–</span>
+    </button>
+    <div class="rounded-xl border border-line px-3 py-2">
+      <p class={cimke}>Kockázat</p>
+      <p data-ki="kockazat" class="font-mono font-semibold">–</p>
+    </div>
+    <div class="rounded-xl border border-line px-3 py-2">
+      <p class={cimke}>R:R</p>
+      <p data-ki="rr" class="font-mono font-semibold">–</p>
+    </div>
+    <div class="col-span-2 rounded-xl border border-line px-3 py-2 sm:col-span-1">
+      <p class={cimke}>Margin (becsült)</p>
+      <p data-ki="margin" class="font-mono font-semibold">–</p>
+    </div>
+  </div>
+  <p data-ki="megjegyzes" class="mt-2 text-sm text-warn" hidden></p>
+</section>
+
+<script>
+  import { meretSzamitas } from '../lib/meret';
+  import { bemenetSzam, huSzam } from '../lib/szam';
+
+  for (const k of document.querySelectorAll<HTMLElement>('[data-kalkulator]')) {
+    const be = (nev: string) => k.querySelector<HTMLInputElement>(`[data-k="${nev}"]`)!;
+    const ki = (nev: string) => k.querySelector<HTMLElement>(`[data-ki="${nev}"]`)!;
+    const meretGomb = k.querySelector<HTMLButtonElement>('[data-eredmeny="meret"]')!;
+    const meretKi = meretGomb.querySelector<HTMLElement>('[data-ertek-ki]')!;
+
+    const szamol = () => {
+      const e = meretSzamitas({
+        stopPont: bemenetSzam(be('stop').value),
+        tpPont: bemenetSzam(be('tp').value),
+        entry: bemenetSzam(be('entry').value),
+      });
+      if (!e) {
+        meretKi.textContent = '–';
+        delete meretGomb.dataset.masol;
+        for (const n of ['kockazat', 'rr', 'margin']) ki(n).textContent = '–';
+        ki('megjegyzes').hidden = true;
+        return;
+      }
+      const meret = huSzam(e.meret, 3);
+      meretKi.textContent = meret;
+      meretGomb.dataset.masol = meret;
+      ki('kockazat').textContent = `${huSzam(e.kockazatUsd, 2)} USD`;
+      ki('rr').textContent = e.rr !== null ? `1 : ${huSzam(e.rr, 1)}` : '–';
+      ki('margin').textContent = e.marginUsd !== null ? `${huSzam(e.marginUsd, 1)} USD` : '–';
+      const megj: string[] = [];
+      if (e.plafonAktiv) megj.push(`A plafon miatt ${meret} (számolt: ${huSzam(e.nyers, 4)}).`);
+      if (e.meret === 0) megj.push('A stop túl nagy: a méret 0, ezt a trade-et nem lehet 1 USD kockázattal felvenni.');
+      if (e.rr !== null && e.rr < 2) megj.push('Az R:R 1:2 alatt van.');
+      ki('megjegyzes').textContent = megj.join(' ');
+      ki('megjegyzes').hidden = megj.length === 0;
+    };
+
+    k.querySelectorAll('input').forEach((i) => i.addEventListener('input', szamol));
+    szamol();
+  }
+</script>

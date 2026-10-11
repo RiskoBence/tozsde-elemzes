@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import Nap from '../components/Nap.astro';
 import NapLapozo from '../components/NapLapozo.astro';
+import MeretKalkulator from '../components/MeretKalkulator.astro';
 import { osszesNap } from '../lib/napok';
 import { url } from '../lib/url';
 
@@ -23,11 +24,14 @@ const ma = napok[0];
         </div>
       </div>
     ) : (
-      <div class="card">
-        <h1 class="text-lg font-semibold">Még nincs elemzés</h1>
-        <p class="mt-2 text-muted">
-          Tegyél egy <code class="font-mono">YYYY-MM-DD-valami.md</code> fájlt a <code class="font-mono">content/elemzesek/</code> mappába, és pushold.
-        </p>
+      <div class="grid grid-cols-1 gap-4">
+        <div class="card">
+          <h1 class="text-lg font-semibold">Még nincs elemzés</h1>
+          <p class="mt-2 text-muted">
+            Tegyél egy <code class="font-mono">YYYY-MM-DD-valami.md</code> fájlt a <code class="font-mono">content/elemzesek/</code> mappába, és pushold.
+          </p>
+        </div>
+        <MeretKalkulator azon="ures" />
       </div>
     )
   }

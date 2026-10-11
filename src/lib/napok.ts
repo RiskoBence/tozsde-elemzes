@@ -24,6 +24,14 @@ export async function osszesNap(): Promise<Nap[]> {
       console.warn(`[elemzesek] Kihagyva, a fájlnévből nem olvasható ki dátum: ${b.id}.md (elvárt: YYYY-MM-DD-valami.md)`);
       continue;
     }
+    if (elemzes.figyelmeztetesek.length) {
+      const fajl = `content/elemzesek/${b.id}.md`;
+      for (const f of elemzes.figyelmeztetesek) {
+        console.warn(`[elemzesek] ${fajl}: nem sikerült kiolvasni – ${f}`);
+        // GitHub Actions annotáció: a futás összegzőjében is megjelenik.
+        if (process.env.GITHUB_ACTIONS) console.log(`::warning file=${fajl},title=Elemzés parsolása::${f}`);
+      }
+    }
     const lista = napok.get(elemzes.datum) ?? [];
     lista.push(elemzes);
     napok.set(elemzes.datum, lista);

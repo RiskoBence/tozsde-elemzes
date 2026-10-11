@@ -1,20 +1,22 @@
 ---
 import '../styles/global.css';
-import { utolsoFrissites } from '../lib/napok';
+import { osszesNap } from '../lib/napok';
+import { ALAP_ABLAK } from '../lib/parse-elemzes';
 import { datumHosszu, napNeve } from '../lib/format';
 import { url } from '../lib/url';
 
 interface Props {
   title: string;
-  aktiv?: 'ma' | 'archivum' | 'sablon' | null;
+  aktiv?: 'ma' | 'archivum' | 'statisztika' | 'sablon' | null;
 }
 
 const { title, aktiv = null } = Astro.props;
-const frissitve = await utolsoFrissites();
+const legutobbi = (await osszesNap())[0] ?? null;
+const frissitve = legutobbi?.datum ?? null;
 const menu = [
   { kulcs: 'ma', cim: 'Ma', href: url('/') },
   { kulcs: 'archivum', cim: 'Archívum', href: url('/archivum/') },
-  { kulcs: 'sablon', cim: 'Sablon', href: url('/sablon/') },
+  { kulcs: 'statisztika', cim: 'Statisztika', rovid: 'Stat.', href: url('/statisztika/') },
 ] as const;
 ---
 
@@ -64,7 +66,14 @@ const menu = [
                   aktiv === m.kulcs ? 'text-fg bg-panel-2' : 'text-muted hover:text-fg',
                 ]}
               >
-                {m.cim}
+                {'rovid' in m ? (
+                  <>
+                    <span class="sm:hidden" aria-hidden="true">{m.rovid}</span>
+                    <span class="max-sm:sr-only">{m.cim}</span>
+                  </>
+                ) : (
+                  m.cim
+                )}
               </a>
             ))
           }
@@ -85,16 +94,28 @@ const menu = [
           </button>
         </nav>
       </div>
-      {
-        frissitve && (
-          <p class="mx-auto max-w-3xl px-4 pb-1.5 text-xs text-muted">
-            Utoljára frissítve:{' '}
-            <time datetime={frissitve}>
-              {datumHosszu(frissitve)} ({napNeve(frissitve)})
-            </time>
-          </p>
-        )
-      }
+      <div class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pb-1.5 text-xs text-muted">
+        {
+          frissitve && (
+            <p>
+              Frissítve:{' '}
+              <time datetime={frissitve}>
+                {datumHosszu(frissitve)} ({napNeve(frissitve)})
+              </time>
+            </p>
+          )
+        }
+        <p
+          id="ablak-allapot"
+          data-ablak={legutobbi?.fo.ablak ?? ALAP_ABLAK}
+          data-alap={ALAP_ABLAK}
+          data-utolso={frissitve ?? ''}
+          class="ml-auto flex flex-wrap items-center justify-end gap-x-2"
+          aria-live="off"
+          hidden
+        >
+        </p>
+      </div>
     </header>
 
     <main id="tartalom" class="mx-auto max-w-3xl px-4 pb-10 pt-4">
@@ -110,20 +131,95 @@ const menu = [
     </div>
 
     <footer class="border-t border-line">
-      <p class="mx-auto max-w-3xl px-4 py-6 text-sm text-muted">
-        A döntés és a felelősség a tiéd. Ez elemzés, nem befektetési tanács, és nem ígér profitot.
-      </p>
+      <div class="mx-auto max-w-3xl px-4 py-6 text-sm text-muted">
+        <p>A döntés és a felelősség a tiéd. Ez elemzés, nem befektetési tanács, és nem ígér profitot.</p>
+        <p class="mt-3">
+          <a href={url('/sablon/')} aria-current={aktiv === 'sablon' ? 'page' : undefined} class="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-fg">
+            Napi elemzési sablon
+          </a>
+        </p>
+      </div>
     </footer>
 
     <script>
-      const gomb = document.getElementById('tema-valto');
-      gomb?.addEventListener('click', () => {
+      import { ablakAllapot, budapestiIdo, idotartam } from '../lib/ablak';
+
+      // --- Téma ---
+      document.getElementById('tema-valto')?.addEventListener('click', () => {
         const sotet = !document.documentElement.classList.contains('dark');
         document.documentElement.classList.toggle('dark', sotet);
         try {
           localStorage.setItem('tema', sotet ? 'sotet' : 'vilagos');
         } catch {}
       });
+
+      // --- Másolás koppintásra: bármely [data-masol] elem ---
+      // A szóköz ezres elválasztó kimarad (a bróker beviteli mezője így fogadja), a tizedesvessző marad.
+      // Ha pontot szeretnél: .replace(',', '.')
+      const masolhato = (ar: string) => ar.replace(/[\s  ]/g, '');
+
+      async function masol(szoveg: string): Promise<boolean> {
+        try {
+          await navigator.clipboard.writeText(szoveg);
+          return true;
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = szoveg;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          return ok;
+        }
+      }
+
+      let idozito: number | undefined;
+      document.addEventListener('click', async (ev) => {
+        const gomb = (ev.target as Element | null)?.closest<HTMLElement>('[data-masol]');
+        if (!gomb?.dataset.masol) return;
+        const szoveg = masolhato(gomb.dataset.masol);
+        const ok = await masol(szoveg);
+        const uzenet = document.getElementById('masolas-uzenet');
+        if (!uzenet) return;
+        uzenet.textContent = ok ? `Másolva: ${szoveg}` : 'A másolás nem sikerült';
+        uzenet.style.opacity = '1';
+        window.clearTimeout(idozito);
+        idozito = window.setTimeout(() => (uzenet.style.opacity = '0'), 1600);
+      });
+
+      // --- Kereskedési ablak állapota (budapesti idő szerint, félpercenként frissül) ---
+      const chip = document.getElementById('ablak-allapot');
+      function frissit() {
+        if (!chip) return;
+        const ido = budapestiIdo();
+        const maiElemzes = chip.dataset.utolso === ido.datum;
+        const ablak = (maiElemzes ? chip.dataset.ablak : chip.dataset.alap) ?? '15:45–17:30';
+        const a = ablakAllapot(ido, ablak);
+        if (!a) return;
+
+        let szoveg = '';
+        let tonus = 'text-muted';
+        if (a.tipus === 'hetvege') szoveg = 'Hétvége';
+        else if (a.tipus === 'elotte') szoveg = `Ablak ${a.nyit}-kor nyit (${idotartam(a.hatra)} múlva)`;
+        else if (a.tipus === 'nyitva') {
+          szoveg = `● Ablak nyitva · zár ${a.zar} (${idotartam(a.hatra)})`;
+          tonus = 'text-ok font-semibold';
+        } else szoveg = 'Mai ablak lezárva';
+
+        const hianyzik = a.tipus !== 'hetvege' && !maiElemzes;
+        chip.replaceChildren(
+          Object.assign(document.createElement('span'), { className: tonus, textContent: szoveg }),
+          ...(hianyzik
+            ? [Object.assign(document.createElement('span'), { className: 'text-warn font-semibold', textContent: '⚠ A mai elemzés még nincs feltöltve' })]
+            : []),
+        );
+        chip.hidden = false;
+      }
+      frissit();
+      window.setInterval(frissit, 30_000);
     </script>
   </body>
 </html>

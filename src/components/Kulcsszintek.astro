@@ -1,11 +1,14 @@
 ---
 import type { Kulcsszint, Riasztas, SzintCsoport } from '../lib/parse-elemzes';
+import { szamErtek } from '../lib/szam';
 
 interface Props {
+  /** Egyedi azonosító (több fül esetén is egyedi id-k kellenek). */
+  azon: string;
   szintek: Kulcsszint[];
   riasztasok: Riasztas[];
 }
-const { szintek, riasztasok } = Astro.props;
+const { azon, szintek, riasztasok } = Astro.props;
 
 const csoportok: Record<SzintCsoport, { nev: string; sav: string; cimke: string }> = {
   celpont: { nev: 'Célpont', sav: 'bg-info', cimke: 'text-info bg-info-bg border-info-line' },
@@ -14,17 +17,44 @@ const csoportok: Record<SzintCsoport, { nev: string; sav: string; cimke: string 
   egyeb: { nev: 'Egyéb', sav: 'bg-line', cimke: 'text-muted bg-panel-2 border-line' },
 };
 const hasznaltCsoportok = (Object.keys(csoportok) as SzintCsoport[]).filter((c) => szintek.some((s) => s.csoport === c));
+const vanErtek = szintek.some((s) => s.ertek !== null);
+const arGomb =
+  'flex min-h-11 min-w-[6.5rem] flex-col items-end justify-center rounded-lg border border-line bg-panel-2 px-2.5 py-1 font-mono text-[0.95rem] font-semibold leading-tight hover:border-accent active:scale-[0.98]';
 ---
 
 {
   (szintek.length > 0 || riasztasok.length > 0) && (
-    <section class="card" aria-label="Kulcsszintek">
+    <section class="card" aria-label="Kulcsszintek" data-szintek>
       <div class="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 class="font-semibold">
-          Kulcsszintek
-        </h2>
+        <h2 class="font-semibold">Kulcsszintek</h2>
         <p class="text-xs text-muted">Koppints egy árra a másoláshoz</p>
       </div>
+
+      {vanErtek && (
+        <div class="mt-3 flex items-end gap-2">
+          <label class="min-w-0 flex-1 text-xs font-medium uppercase tracking-wider text-muted">
+            Jelenlegi ár <span class="normal-case tracking-normal">(távolság pontban)</span>
+            <input
+              id={`ar-${azon}`}
+              data-jelenlegi-ar
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="pl. 31 600,0"
+              class="mt-1 block min-h-11 w-full rounded-xl border border-line bg-panel-2 px-3 font-mono text-base text-fg placeholder:text-muted focus:border-accent"
+            />
+          </label>
+          <button
+            type="button"
+            data-ar-torles
+            class="min-h-11 rounded-xl border border-line px-3 text-sm text-muted hover:text-fg"
+            aria-label="Jelenlegi ár törlése"
+            hidden
+          >
+            Törlés
+          </button>
+        </div>
+      )}
 
       {riasztasok.length > 0 && (
         <div class="mt-3">
@@ -35,11 +65,15 @@ const hasznaltCsoportok = (Object.keys(csoportok) as SzintCsoport[]).filter((c) 
                 <button
                   type="button"
                   data-masol={r.ar}
+                  data-ertek={szamErtek(r.ar) ?? undefined}
                   class="flex min-h-11 items-center gap-2 rounded-xl border border-warn-line bg-warn-bg px-3 text-left active:scale-[0.98]"
                 >
                   <span aria-hidden="true">🔔</span>
-                  <span class="font-mono font-semibold text-fg">{r.ar}</span>
-                  {r.cimke && <span class="text-xs text-muted">{r.cimke}</span>}
+                  <span class="font-mono font-semibold whitespace-nowrap text-fg">{r.ar}</span>
+                  <span class="flex flex-col text-xs leading-tight text-muted">
+                    {r.cimke && <span>{r.cimke}</span>}
+                    <span data-tav class="font-mono whitespace-nowrap" hidden />
+                  </span>
                 </button>
               </li>
             ))}
@@ -48,9 +82,9 @@ const hasznaltCsoportok = (Object.keys(csoportok) as SzintCsoport[]).filter((c) 
       )}
 
       {szintek.length > 0 && (
-        <ul class="mt-4 divide-y divide-line">
+        <ul class="mt-4 divide-y divide-line" data-szint-lista>
           {szintek.map((s) => (
-            <li class="relative flex items-center gap-3 py-2 pl-3">
+            <li class="relative flex items-center gap-3 py-2 pl-3" data-sor-ertek={s.ertek ?? undefined}>
               <span aria-hidden="true" class:list={['absolute inset-y-1.5 left-0 w-1 rounded-full', csoportok[s.csoport].sav]} />
               <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium leading-snug">{s.szint}</p>
@@ -62,13 +96,9 @@ const hasznaltCsoportok = (Object.keys(csoportok) as SzintCsoport[]).filter((c) 
               <div class="flex shrink-0 flex-col items-end gap-1">
                 {s.arak.length > 0 ? (
                   s.arak.map((ar) => (
-                    <button
-                      type="button"
-                      data-masol={ar}
-                      aria-label={`${ar} másolása`}
-                      class="min-h-11 min-w-[6.5rem] rounded-lg border border-line bg-panel-2 px-2.5 text-right font-mono text-[0.95rem] font-semibold hover:border-accent active:scale-[0.98]"
-                    >
-                      {ar}
+                    <button type="button" data-masol={ar} data-ertek={szamErtek(ar) ?? undefined} aria-label={`${ar} másolása`} class={arGomb}>
+                      <span>{ar}</span>
+                      <span data-tav class="text-[0.7rem] font-medium text-muted" hidden />
                     </button>
                   ))
                 ) : (
@@ -94,41 +124,78 @@ const hasznaltCsoportok = (Object.keys(csoportok) as SzintCsoport[]).filter((c) 
   )
 }
 
-
 <script>
-  // Másoláskor a szóköz ezres elválasztó kimarad (a bróker beviteli mezője így fogadja),
-  // a tizedesvessző marad. Ha pontot szeretnél: .replace(',', '.')
-  const masolhato = (ar: string) => ar.replace(/[\s  ]/g, '');
+  import { bemenetSzam, huSzam } from '../lib/szam';
 
-  async function masol(szoveg: string): Promise<boolean> {
+  // A beírt ár csak a böngészőfülön belül marad meg (másnap már úgysem érvényes).
+  const KULCS = 'jelenlegi-ar';
+  const olvas = () => {
     try {
-      await navigator.clipboard.writeText(szoveg);
-      return true;
+      return sessionStorage.getItem(KULCS) ?? '';
     } catch {
-      const ta = document.createElement('textarea');
-      ta.value = szoveg;
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      ta.remove();
-      return ok;
+      return '';
+    }
+  };
+  const ir = (v: string) => {
+    try {
+      if (v) sessionStorage.setItem(KULCS, v);
+      else sessionStorage.removeItem(KULCS);
+    } catch {}
+  };
+
+  const kartyak = [...document.querySelectorAll<HTMLElement>('[data-szintek]')];
+
+  function alkalmaz(kartya: HTMLElement, szoveg: string) {
+    const ar = bemenetSzam(szoveg);
+    const torles = kartya.querySelector<HTMLButtonElement>('[data-ar-torles]');
+    if (torles) torles.hidden = !szoveg;
+
+    for (const gomb of kartya.querySelectorAll<HTMLElement>('[data-ertek]')) {
+      const tav = gomb.querySelector<HTMLElement>('[data-tav]');
+      if (!tav) continue;
+      if (ar === null) {
+        tav.hidden = true;
+        continue;
+      }
+      const kulonbseg = Number(gomb.dataset.ertek) - ar;
+      tav.textContent = `${huSzam(kulonbseg, 1, true)} pt`;
+      tav.hidden = false;
+    }
+
+    // „most itt” jelölő a csökkenő sorrendű szintek közé
+    const lista = kartya.querySelector<HTMLElement>('[data-szint-lista]');
+    lista?.querySelector('[data-most]')?.remove();
+    if (lista && ar !== null) {
+      const sor = document.createElement('li');
+      sor.dataset.most = '';
+      sor.className = 'flex items-center gap-2 py-1.5 text-sm font-semibold text-accent';
+      sor.innerHTML = '<span aria-hidden="true">▶</span>';
+      sor.append(Object.assign(document.createElement('span'), { textContent: `most: ${huSzam(ar, 1)}` }));
+      sor.append(Object.assign(document.createElement('span'), { className: 'h-px flex-1 bg-accent/40', ariaHidden: 'true' }));
+      const alatta = [...lista.querySelectorAll<HTMLElement>('li[data-sor-ertek]')].find((li) => Number(li.dataset.sorErtek) < ar);
+      lista.insertBefore(sor, alatta ?? null);
     }
   }
 
-  let idozito: number | undefined;
-  document.addEventListener('click', async (ev) => {
-    const gomb = (ev.target as Element | null)?.closest<HTMLElement>('[data-masol]');
-    if (!gomb) return;
-    const szoveg = masolhato(gomb.dataset.masol ?? '');
-    const ok = await masol(szoveg);
-    const uzenet = document.getElementById('masolas-uzenet');
-    if (!uzenet) return;
-    uzenet.textContent = ok ? `Másolva: ${szoveg}` : 'A másolás nem sikerült';
-    uzenet.style.opacity = '1';
-    window.clearTimeout(idozito);
-    idozito = window.setTimeout(() => (uzenet.style.opacity = '0'), 1600);
-  });
+  const mentett = olvas();
+  for (const kartya of kartyak) {
+    const mezo = kartya.querySelector<HTMLInputElement>('[data-jelenlegi-ar]');
+    if (!mezo) continue;
+    mezo.value = mentett;
+    alkalmaz(kartya, mentett);
+    mezo.addEventListener('input', () => {
+      ir(mezo.value.trim());
+      // A többi fül kártyái is kövessék.
+      for (const k of kartyak) {
+        const m = k.querySelector<HTMLInputElement>('[data-jelenlegi-ar]');
+        if (m && m !== mezo) m.value = mezo.value;
+        alkalmaz(k, mezo.value.trim());
+      }
+    });
+    kartya.querySelector('[data-ar-torles]')?.addEventListener('click', () => {
+      mezo.value = '';
+      mezo.dispatchEvent(new Event('input'));
+      mezo.focus();
+    });
+  }
 </script>
