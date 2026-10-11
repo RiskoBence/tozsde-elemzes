@@ -69,6 +69,10 @@ export interface TradeTerv {
   entryErtek: number | null;
   stopPont: number | null;
   tpPont: number | null;
+  /** LONG: vétel a belépésnél, eladás a TP-n / SL-en; SHORT: fordítva. */
+  irany: 'LONG' | 'SHORT' | null;
+  slAr: number | null;
+  tpAr: number | null;
 }
 
 export interface Trade {
@@ -461,12 +465,47 @@ function tradeTerv(md: string): TradeTerv | null {
     const n = szamErtek(cella);
     return n !== null && n < 1000 ? n : null; // egyetlen kis szám: pont
   };
+  /** Az „ár / pont” cella ár része (ár-nagyságú szám a perjel előtt). */
+  const arResz = (cella: string): number | null => {
+    const n = cella ? szamErtek(cella.split('/')[0]) : null;
+    return n !== null && n >= 1000 ? n : null;
+  };
+  const iranyCella = sor(/^long\s*\/\s*short|^irány/i);
+  const long = /\b(long|vétel|buy)\b/i.test(iranyCella);
+  const short = /\b(short|eladás|sell)\b/i.test(iranyCella);
+
   const entry = sor(/^entry/i);
+  const slCella = sor(/^stop\s*loss|^SL\b/i);
+  const tpCella = sor(/^take\s*profit|^TP\b/i);
+  const entryErtek = entry ? szamErtek(entry) : null;
+  let stopPont = pontResz(slCella);
+  let tpPont = pontResz(tpCella);
+  let slAr = arResz(slCella);
+  let tpAr = arResz(tpCella);
+  let irany: TradeTerv['irany'] = long === short ? null : long ? 'LONG' : 'SHORT'; // mindkettő = kitöltetlen sablon
+
+  // Hiányzó irány: a TP / SL helyzetéből
+  if (!irany && entryErtek !== null) {
+    if (tpAr !== null) irany = tpAr > entryErtek ? 'LONG' : 'SHORT';
+    else if (slAr !== null) irany = slAr < entryErtek ? 'LONG' : 'SHORT';
+  }
+  // Hiányzó ár a pontból, hiányzó pont az árból
+  if (entryErtek !== null && irany) {
+    const elojel = irany === 'LONG' ? 1 : -1;
+    if (slAr === null && stopPont !== null) slAr = entryErtek - elojel * stopPont;
+    if (tpAr === null && tpPont !== null) tpAr = entryErtek + elojel * tpPont;
+    if (stopPont === null && slAr !== null) stopPont = Math.abs(entryErtek - slAr);
+    if (tpPont === null && tpAr !== null) tpPont = Math.abs(tpAr - entryErtek);
+  }
+
   const terv: TradeTerv = {
     entry: entry && /\d/.test(entry) ? entry : null,
-    entryErtek: entry ? szamErtek(entry) : null,
-    stopPont: pontResz(sor(/^stop\s*loss|^SL\b/i)),
-    tpPont: pontResz(sor(/^take\s*profit|^TP\b/i)),
+    entryErtek,
+    stopPont,
+    tpPont,
+    irany,
+    slAr,
+    tpAr,
   };
   return terv.entry || terv.stopPont ? terv : null;
 }

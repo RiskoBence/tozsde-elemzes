@@ -28,8 +28,19 @@ describe('napló parsolása', () => {
   });
 
   it('trade terv a kalkulátorhoz', () => {
-    expect(zaro.tradeTerv).toEqual({ entry: '31 520,0', entryErtek: 31520, stopPont: 40, tpPont: 80 });
-    expect(elokeszito.tradeTerv).toMatchObject({ entry: '31 480,0', stopPont: 40, tpPont: 400 });
+    expect(zaro.tradeTerv).toEqual({ entry: '31 520,0', entryErtek: 31520, stopPont: 40, tpPont: 80, irany: 'SHORT', slAr: 31560, tpAr: 31440 });
+    expect(elokeszito.tradeTerv).toMatchObject({ entry: '31 480,0', stopPont: 40, tpPont: 400, irany: 'LONG', slAr: 31440, tpAr: 31880.5 });
+  });
+
+  it('trade terv: irány és ár a pontból, kitöltetlen sablonnál nincs irány', () => {
+    const terv = (sorok: string) => parseElemzes('2026-10-14-x.md', `## 5. Trade terv\n\n| Mező | Érték |\n|---|---|\n${sorok}`)!.tradeTerv;
+    expect(terv('| Long / Short | Short |\n| Entry | 31 500,0 |\n| Stop Loss (ár / pont) | / 30 |\n| Take Profit (ár / pont) | / 90 |')).toMatchObject({
+      irany: 'SHORT',
+      slAr: 31530,
+      tpAr: 31410,
+    });
+    expect(terv('| Entry | 31 500,0 |\n| Take Profit (ár / pont) | 31 600,0 / 100 |')).toMatchObject({ irany: 'LONG', tpAr: 31600 });
+    expect(terv('| Long / Short | |\n| Entry | |\n| Stop Loss (ár / pont) | / |')).toBeNull();
   });
 });
 

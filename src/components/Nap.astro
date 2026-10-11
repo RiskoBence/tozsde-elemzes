@@ -26,6 +26,8 @@ function fulNev(slug: string, i: number): string {
 // Alapból a legfrissebb (fájlnév szerint utolsó) elemzés látszik.
 const aktivIndex = nap.elemzesek.length - 1;
 const tobb = nap.elemzesek.length > 1;
+// A nap korábbi fájljainak legutóbbi irányos terve (a frissítés-fülnek, ha abban nincs saját).
+const tartalek = (i: number) => [...nap.elemzesek.slice(0, i)].reverse().find((e) => e.tradeTerv?.irany)?.tradeTerv ?? null;
 ---
 
 {
@@ -48,7 +50,7 @@ const tobb = nap.elemzesek.length > 1;
       </div>
       {nap.elemzesek.map((e, i) => (
         <div role="tabpanel" id={`panel-${e.id}`} aria-labelledby={`ful-${e.id}`} hidden={i !== aktivIndex}>
-          <NapNezet elemzes={e} />
+          <NapNezet elemzes={e} tervTartalek={tartalek(i)} />
         </div>
       ))}
     </div>

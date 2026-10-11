@@ -63,7 +63,13 @@ Fájl: `content/elemzesek/<datum>-elokeszito.md`. Ha már létezik, írd felül.
   - A POI-zóna árformája: `31 470,0–31 495,0`.
 - **3. Forgatókönyvek:** `**A) Fő forgatókönyv (HTF iránnyal)**`, `**B) Alternatív forgatókönyv (ellentétes)**`, `**C) Nincs trade**, ha: …`. Az A blokk tartalmazza a `- Cél: …` és a `- Érvénytelen, ha: záró … alatt/fölött` sorokat konkrét árral, mert az oldal ezek alapján színezi a szinteket.
 - **4. Belépési feltételek:** a sablonból, a mai árakkal.
-- **5. Trade terv:** ha van értelmes fő forgatókönyv, töltsd ki a tervezett Entry, „Stop Loss (ár / pont)” és „Take Profit (ár / pont)” mezőket (pl. `31 440,0 / 40`). A méretet a sablon képletével számold: 1 / (stop + 1,2), lefelé 0,001-re kerekítve, plafon 0,030. Ha nincs setup, a táblázatot hagyd üresen.
+- **5. Trade terv:** ha van fő forgatókönyv (feltételes is), töltsd ki, mert a diagram ebből rajzolja a belépést, a TP-t és az SL-t, a zónákat és a visszajátszást.
+  - `| Long / Short | Long |` vagy `Short`. Csak az egyik szó szerepeljen.
+  - `| Entry | 31 040,0 |`
+  - `| Stop Loss (ár / pont) | 30 950,0 / 90 |`
+  - `| Take Profit (ár / pont) | 31 266,5 / 226,5 |`
+  - A méret a sablon képletével: 1 / (stop + 1,2), lefelé 0,001-re kerekítve, plafon 0,030.
+  - Ha nincs setup (NINCS SETUP), hagyd üresen a táblázatot. Ekkor a diagramon nem jelenik meg terv.
 - **6. Checklist:** `- [x]` / `- [ ]`. Csak azt pipáld ki, ami az adatokból már most igazolható. Az LTF BoS nyitás előtt még nem lehet kész.
 - **7. Döntés:**
   - Az első félkövér sor: `**VAN SETUP (feltételes: …)**`, `**NINCS SETUP**` vagy `**FELTÉTELES TERV**`, utána `— indoklás 1–3 mondatban`.
@@ -106,6 +112,8 @@ Riasztások beállítva: **…** (…), **…** (…)
 ## Figyeld
 - …
 ```
+
+Ha a trade terv változott (új entry, SL vagy TP), tegyél a frissítésbe is egy `## 5. Trade terv` táblázatot ugyanabban a formában, mint az előkészítőben. Ha nem változott, hagyd ki: a diagram ilyenkor az előkészítő tervét mutatja.
 
 Az Előszűrés és a HTF bias az előkészítőből jön. Csak akkor változtasd meg, ha azóta új információ lett (pl. váratlan hír). Az ablak vége után (17:30) írd meg, hogy az ablak lezárult, és milyen a napi összkép.
 

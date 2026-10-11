@@ -1,5 +1,5 @@
 ---
-import type { Elemzes } from '../lib/parse-elemzes';
+import type { Elemzes, TradeTerv } from '../lib/parse-elemzes';
 import Osszkep from './Osszkep.astro';
 import HetFigyelmeztetes from './HetFigyelmeztetes.astro';
 import Kulcsszintek from './Kulcsszintek.astro';
@@ -11,14 +11,17 @@ import Szakaszok from './Szakaszok.astro';
 
 interface Props {
   elemzes: Elemzes;
+  /** Ha ebben a fájlban nincs irányos trade terv (pl. frissítés), a nap korábbi fájljának terve. */
+  tervTartalek?: TradeTerv | null;
 }
-const { elemzes } = Astro.props;
+const { elemzes, tervTartalek = null } = Astro.props;
+const terv = elemzes.tradeTerv?.irany ? elemzes.tradeTerv : tervTartalek;
 ---
 
 <div class="grid grid-cols-1 gap-4">
   <Osszkep elemzes={elemzes} />
   <HetFigyelmeztetes elemek={elemzes.hetFigyelmeztetes} />
-  <Diagram azon={elemzes.id} datum={elemzes.datum} ablak={elemzes.ablak} szintek={elemzes.kulcsszintek} riasztasok={elemzes.riasztasok} figyeld={elemzes.figyeld} />
+  <Diagram azon={elemzes.id} datum={elemzes.datum} ablak={elemzes.ablak} szintek={elemzes.kulcsszintek} riasztasok={elemzes.riasztasok} figyeld={elemzes.figyeld} terv={terv} />
   <Kulcsszintek azon={elemzes.id} szintek={elemzes.kulcsszintek} riasztasok={elemzes.riasztasok} />
   <Forgatokonyvek lista={elemzes.forgatokonyvek} />
   <MeretKalkulator azon={elemzes.id} terv={elemzes.tradeTerv} />

@@ -1,7 +1,8 @@
 ---
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Kulcsszint, Riasztas } from '../lib/parse-elemzes';
+import type { Kulcsszint, Riasztas, TradeTerv } from '../lib/parse-elemzes';
+import { huSzam } from '../lib/szam';
 import { url } from '../lib/url';
 
 interface Props {
@@ -11,8 +12,17 @@ interface Props {
   szintek: Kulcsszint[];
   riasztasok: Riasztas[];
   figyeld: string[];
+  /** Az 5. Trade terv: belépés, TP, SL a diagramon. */
+  terv?: TradeTerv | null;
 }
-const { azon, datum, ablak, szintek, riasztasok, figyeld } = Astro.props;
+const { azon, datum, ablak, szintek, riasztasok, figyeld, terv = null } = Astro.props;
+
+// A diagramon csak teljes irányú, áras terv jelenik meg.
+const diagramTerv =
+  terv?.irany && terv.entryErtek !== null ? { irany: terv.irany, entry: terv.entryErtek, sl: terv.slAr, tp: terv.tpAr } : null;
+const vetel = diagramTerv?.irany === 'LONG';
+const pont = (a: number | null) => (a !== null && diagramTerv ? huSzam(a - diagramTerv.entry, 1, true) : '');
+const rr = diagramTerv?.sl != null && diagramTerv.tp != null ? Math.abs(diagramTerv.tp - diagramTerv.entry) / Math.abs(diagramTerv.entry - diagramTerv.sl) : null;
 
 // Csak akkor jelenik meg, ha az adatletöltő (scripts/adat.mjs) írt pillanatképet erre a napra.
 const vanAdat = existsSync(join(process.cwd(), 'public', 'adat', 'nap', `${datum}.json`));
@@ -20,7 +30,7 @@ const vanAdat = existsSync(join(process.cwd(), 'public', 'adat', 'nap', `${datum
 const elemzesSzintek = szintek.flatMap((s) =>
   s.arak.map((ar) => ({ nev: s.szint, ar, csoport: s.csoport })),
 );
-const adatok = JSON.stringify({ szintek: elemzesSzintek, riasztasok, ablak, datum });
+const adatok = JSON.stringify({ szintek: elemzesSzintek, riasztasok, ablak, datum, terv: diagramTerv });
 const chip =
   'min-h-9 rounded-lg border border-line px-2.5 text-xs font-medium text-muted aria-pressed:border-accent aria-pressed:bg-panel-2 aria-pressed:text-fg';
 ---
@@ -50,7 +60,52 @@ const chip =
             <button type="button" class={chip} data-reteg="gepi" aria-pressed="false">
               Gépi szintek
             </button>
+            {diagramTerv && (
+              <button type="button" class={chip} data-reteg="terv" aria-pressed="true">
+                Trade terv
+              </button>
+            )}
           </div>
+
+          {diagramTerv && (
+            <div class="mt-3 rounded-xl border border-line bg-panel-2 px-3 py-2 text-sm" data-terv-doboz>
+              <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class:list={['rounded-md px-2 py-0.5 text-xs font-bold', vetel ? 'bg-ok text-bg' : 'bg-bad text-bg']}>
+                  {vetel ? '▲ LONG' : '▼ SHORT'} terv
+                </span>
+                <span>
+                  <span class="text-muted">Belépés ({vetel ? 'vétel' : 'eladás'}):</span>{' '}
+                  <button type="button" data-masol={huSzam(diagramTerv.entry, 1)} class="font-mono font-semibold text-accent underline decoration-dotted underline-offset-2">
+                    {huSzam(diagramTerv.entry, 1)}
+                  </button>
+                </span>
+              </p>
+              <p class="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {diagramTerv.tp !== null && (
+                  <span>
+                    <span class="text-muted">Kilépés TP ({vetel ? 'eladás' : 'vétel'}):</span>{' '}
+                    <button type="button" data-masol={huSzam(diagramTerv.tp, 1)} class="font-mono font-semibold text-ok underline decoration-dotted underline-offset-2">
+                      {huSzam(diagramTerv.tp, 1)}
+                    </button>{' '}
+                    <span class="text-xs text-muted">({pont(diagramTerv.tp)} pt)</span>
+                  </span>
+                )}
+                {diagramTerv.sl !== null && (
+                  <span>
+                    <span class="text-muted">Stop SL ({vetel ? 'eladás' : 'vétel'}):</span>{' '}
+                    <button type="button" data-masol={huSzam(diagramTerv.sl, 1)} class="font-mono font-semibold text-bad underline decoration-dotted underline-offset-2">
+                      {huSzam(diagramTerv.sl, 1)}
+                    </button>{' '}
+                    <span class="text-xs text-muted">({pont(diagramTerv.sl)} pt)</span>
+                  </span>
+                )}
+                {rr !== null && <span class="text-muted">R:R 1 : {huSzam(rr, 1)}</span>}
+              </p>
+              <p class="mt-1 text-xs text-muted" data-szim>
+                Visszajátszás: a diagram jelöli, hol teljesült volna a limit és utána a TP vagy az SL (a BoS-megerősítést nem vizsgálja).
+              </p>
+            </div>
+          )}
 
           <div class="relative mt-3 h-80 w-full overflow-hidden rounded-xl border border-line sm:h-96" data-vaszon>
             <p class="absolute inset-0 flex items-center justify-center text-sm text-muted" data-tolt>
@@ -103,9 +158,10 @@ const chip =
 }
 
 <script>
-  import { CandlestickSeries, ColorType, LineStyle, createChart, createSeriesMarkers, type IChartApi, type IPriceLine, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+  import { BaselineSeries, CandlestickSeries, ColorType, LineStyle, createChart, createSeriesMarkers, type IChartApi, type IPriceLine, type ISeriesApi, type ISeriesMarkersPluginApi, type UTCTimestamp, type Time } from 'lightweight-charts';
   import { budapestiIdo, ablakAllapot } from '../lib/ablak';
   import { huSzam } from '../lib/szam';
+  import { tervSzimulacio, type SzimTerv } from '../lib/terv-szimulacio';
 
   type Gyertya = [number, number, number, number, number];
   interface Adat {
@@ -121,6 +177,7 @@ const chip =
     riasztasok: { ar: string; cimke: string | null }[];
     ablak: string;
     datum: string;
+    terv: SzimTerv | null;
   }
 
   const szam = (s: string) => Number(s.replace(/[\s  ]/g, '').replace(',', '.'));
@@ -153,6 +210,22 @@ const chip =
     return ki;
   }
 
+  /** #rrggbb → rgba(…, a) */
+  function atlatszo(hex: string, a: number) {
+    const m = hex.match(/^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+    return m ? `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${a})` : hex;
+  }
+
+  /** A budapesti „hh:mm” időpont unix ideje az adott napon (az 5 perces gyertyák alapján). */
+  function napiIdopont(g5: Gyertya[], datum: string, hhmm: string): number | null {
+    const [o, p] = hhmm.split(':').map(Number);
+    const cel = g5.find((g) => {
+      const d = new Date(bp(g[0]) * 1000);
+      return d.toISOString().slice(0, 10) === datum && d.getUTCHours() * 60 + d.getUTCMinutes() >= o * 60 + p;
+    });
+    return cel ? cel[0] : null;
+  }
+
   function percekOta(iso: string) {
     return Math.round((Date.now() - Date.parse(iso)) / 60000);
   }
@@ -175,11 +248,32 @@ const chip =
     toltes.remove();
 
     let tf = '5M';
-    const retegek = { elemzes: e.szintek.length > 0, gepi: e.szintek.length === 0 };
+    const retegek = { elemzes: e.szintek.length > 0, gepi: e.szintek.length === 0, terv: !!e.terv };
     doboz.querySelectorAll<HTMLButtonElement>('[data-reteg]').forEach((b) => b.setAttribute('aria-pressed', String(retegek[b.dataset.reteg as keyof typeof retegek])));
     let chart: IChartApi | null = null;
     let sorozat: ISeriesApi<'Candlestick'> | null = null;
     let vonalak: IPriceLine[] = [];
+    let jeloloRiteg: ISeriesMarkersPluginApi<Time> | null = null;
+    let tpZona: ISeriesApi<'Baseline'> | null = null;
+    let slZona: ISeriesApi<'Baseline'> | null = null;
+
+    // A terv visszajátszása az ablak nyitásától, 5 perces gyertyákon.
+    const ablakNyit = e.ablak.split(/s*[–—-]s*/)[0] ?? '';
+    const szimKezdet = e.terv ? napiIdopont(adat.g5, adat.datum, ablakNyit) : null;
+    const szim = e.terv && szimKezdet !== null ? tervSzimulacio(adat.g5, e.terv, szimKezdet) : null;
+    const idoSzoveg = (t: number) => new Date(t * 1000).toLocaleTimeString('hu-HU', { timeZone: 'Europe/Budapest', hour: '2-digit', minute: '2-digit' });
+    const szimSor = doboz.querySelector<HTMLElement>('[data-szim]');
+    if (szimSor && e.terv) {
+      if (szimKezdet === null) szimSor.textContent = 'Visszajátszás: a mai ablakhoz még nincs adat.';
+      else if (!szim?.belepes) szimSor.textContent = 'Visszajátszás: a belépési limit a mai ablakban eddig nem teljesült.';
+      else {
+        const be = `belépés ${idoSzoveg(szim.belepes.t)}`;
+        const ki = szim.kilepes
+          ? ` → ${szim.kilepes.tipus} ${idoSzoveg(szim.kilepes.t)}${szim.r !== null ? ` (${huSzam(szim.kilepes.tipus === 'SL' ? -1 : szim.r, 1, true)} R)` : ''}`
+          : ' → még nyitva (sem TP, sem SL)';
+        szimSor.textContent = `Visszajátszás: ${be}${ki}. Csak tájékoztató, a BoS-megerősítést nem vizsgálja.`;
+      }
+    }
 
     const csoportSzin: Record<string, string> = { celpont: '--info', poi: '--poi', ervenytelenito: '--bad', egyeb: '--muted' };
 
@@ -203,6 +297,14 @@ const chip =
           vonalak.push(sorozat.createPriceLine({ price: ar, color: valtozo('--warn'), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `🔔 ${r.cimke ?? ''}`.trim() }));
         }
       }
+      if (retegek.terv && e.terv) {
+        const long = e.terv.irany === 'LONG';
+        vonalak.push(sorozat.createPriceLine({ price: e.terv.entry, color: valtozo('--accent'), lineWidth: 2, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: long ? '▲ VÉTEL (belépés)' : '▼ ELADÁS (belépés)' }));
+        if (e.terv.tp !== null) vonalak.push(sorozat.createPriceLine({ price: e.terv.tp, color: valtozo('--ok'), lineWidth: 2, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: long ? '▼ ELADÁS · TP' : '▲ VÉTEL · TP' }));
+        if (e.terv.sl !== null) vonalak.push(sorozat.createPriceLine({ price: e.terv.sl, color: valtozo('--bad'), lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: long ? '▼ ELADÁS · SL' : '▲ VÉTEL · SL' }));
+      }
+      tpZona?.applyOptions({ visible: retegek.terv });
+      slZona?.applyOptions({ visible: retegek.terv });
       if (retegek.gepi) {
         for (const s of adat.szintek.lista) {
           if (retegek.elemzes && elemzesArak.some((a) => Math.abs(a - s.ar) < 3)) continue;
@@ -229,7 +331,27 @@ const chip =
           if (cel) jelolok.push({ time: bp(cel[0]), position: 'aboveBar' as const, color: valtozo('--accent'), shape: 'arrowDown' as const, text: felirat });
         }
       }
-      createSeriesMarkers(sorozat, jelolok);
+      // Nyereség- (entry → TP) és kockázati (entry → SL) zóna a mai ablaktól a diagram végéig
+      const perc = tf === '1H' ? 60 : tf === '15M' ? 15 : 5;
+      const savKezdet = (t: number) => Math.floor(t / (perc * 60)) * perc * 60;
+      if (e.terv) {
+        const kezdo = szimKezdet !== null ? savKezdet(szimKezdet) : nyers.at(-30)?.[0] ?? 0;
+        const idok = nyers.filter((g) => g[0] >= kezdo).map((g) => bp(g[0]));
+        if (e.terv.tp !== null) tpZona?.setData(idok.map((time) => ({ time, value: e.terv!.tp! })));
+        if (e.terv.sl !== null) slZona?.setData(idok.map((time) => ({ time, value: e.terv!.sl! })));
+      }
+      // A visszajátszott belépés és kilépés jelölése
+      if (szim?.belepes && e.terv) {
+        const long = e.terv.irany === 'LONG';
+        jelolok.push({ time: bp(savKezdet(szim.belepes.t)), position: long ? ('belowBar' as const) : ('aboveBar' as const), color: valtozo('--accent'), shape: long ? ('arrowUp' as const) : ('arrowDown' as const), text: long ? 'VÉTEL' : 'ELADÁS' });
+        if (szim.kilepes) {
+          const tp = szim.kilepes.tipus === 'TP';
+          jelolok.push({ time: bp(savKezdet(szim.kilepes.t)), position: long ? ('aboveBar' as const) : ('belowBar' as const), color: valtozo(tp ? '--ok' : '--bad'), shape: long ? ('arrowDown' as const) : ('arrowUp' as const), text: `${long ? 'ELADÁS' : 'VÉTEL'} ${szim.kilepes.tipus}` });
+        }
+      }
+      jelolok.sort((a, b) => a.time - b.time);
+      if (jeloloRiteg) jeloloRiteg.setMarkers(jelolok);
+      else jeloloRiteg = createSeriesMarkers(sorozat, jelolok);
       const db = tf === '1H' ? 120 : tf === '15M' ? 96 : 160;
       chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, nyers.length - db), to: nyers.length + 3 });
     }
@@ -245,6 +367,29 @@ const chip =
         localization: { locale: 'hu-HU', priceFormatter: (p: number) => huSzam(p, 1) },
         crosshair: { mode: 0 },
       });
+      // A zónák a gyertyák alá kerülnek (előbb hozzáadott sorozat = alsó réteg)
+      tpZona = slZona = null;
+      jeloloRiteg = null;
+      if (e.terv) {
+        const zona = (szin: string, felette: boolean) =>
+          chart!.addSeries(BaselineSeries, {
+            baseValue: { type: 'price', price: e.terv!.entry },
+            topLineColor: 'transparent',
+            bottomLineColor: 'transparent',
+            topFillColor1: felette ? atlatszo(szin, 0.22) : 'transparent',
+            topFillColor2: felette ? atlatszo(szin, 0.22) : 'transparent',
+            bottomFillColor1: felette ? 'transparent' : atlatszo(szin, 0.22),
+            bottomFillColor2: felette ? 'transparent' : atlatszo(szin, 0.22),
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false,
+          });
+        const long = e.terv.irany === 'LONG';
+        // LONG: TP fölötte (zöld), SL alatta (piros); SHORT: fordítva
+        if (e.terv.tp !== null) tpZona = zona(valtozo('--ok'), long);
+        if (e.terv.sl !== null) slZona = zona(valtozo('--bad'), !long);
+      }
       sorozat = chart.addSeries(CandlestickSeries, {
         upColor: valtozo('--ok'),
         downColor: valtozo('--bad'),
