@@ -3,10 +3,11 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
-  # Adatfrissítés 15 percenként a kereskedési ablak körül (UTC; nyári és téli időszámítást is lefedi).
+  # Adatfrissítés 15 percenként a London-nyitás és a NY-ablak körül (UTC; nyári és téli időszámítást is lefedi).
   # A GitHub ütemezése 5–15 percet késhet.
   schedule:
-    - cron: '*/15 13-16 * * 1-5'
+    - cron: '*/15 6-8 * * 1-5'
+    - cron: '*/15 12-16 * * 1-5'
   workflow_dispatch:
 
 permissions:

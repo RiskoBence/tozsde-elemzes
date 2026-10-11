@@ -8,19 +8,28 @@ Az elemzés **indikátor nélküli price action**: struktúra (HH/HL, LL/LH), Bo
 
 ```bash
 git pull --rebase -q
-node scripts/idopont.mjs
+node scripts/idopont.mjs --engedett <a rutin promptjában megadott slotok>
 ```
 
-A kimenet `mod` mezője dönt:
+Naponta 4 futás van (budapesti idő, az EU/US eltérő átállási hetén a NY-futások egy órával korábban):
+
+| slot | időpont | mod | fájl |
+|---|---|---|---|
+| `1-london` | 09:00, London nyitás | `teljes` | `<datum>-1-london.md` |
+| `2-london-30` | 09:30, London +30 perc | `frissites` | `<datum>-2-london-30.md` |
+| `3-ny-elott` | 15:15, NY nyitás előtt 15 perccel | `teljes` | `<datum>-3-ny-elott.md` |
+| `4-ny-utan` | 16:00, NY nyitás után 30 perccel | `frissites` | `<datum>-4-ny-utan.md` |
+
+A kimenet `mod` mezője dönt, a `fajl` mező adja a pontos útvonalat:
 
 | mod | teendő |
 |---|---|
 | `kihagy` | **Azonnal fejezd be**, ne írj és ne commitolj semmit. Egy mondatban írd ki, hogy nem releváns az időpont. |
-| `unnep` | Írj egy rövid `content/elemzesek/<datum>-elokeszito.md` fájlt: `# TECH100 – <datum> (US ünnep)`, `**Előszűrés: PIROS** (indok: NYSE zárva – US ünnep)`, és `## 7. Döntés` alatt `**NINCS SETUP** — US ünnepnap, nincs cash session.` Utána commit és push (5. lépés). |
-| `elokeszito` | Teljes napi elemzés (3. lépés). |
-| `frissites` | Napközbeni frissítés (4. lépés). |
+| `unnep` | Írj egy rövid fájlt a `fajl` útvonalra: `# TECH100 – <datum> (US ünnep)`, `**Előszűrés: PIROS** (indok: NYSE zárva – US ünnep)`, és `## 7. Döntés` alatt `**NINCS SETUP** — US ünnepnap, nincs cash session.` Utána commit és push (5. lépés). |
+| `teljes` | Teljes elemzés a sablon szerint (3. lépés). |
+| `frissites` | Frissítés (4. lépés). |
 
-A `datum` mező a budapesti dátum. A fájlnevekben ezt használd.
+A `datum` mező a budapesti dátum. Mindig pontosan a `fajl` útvonalra írj, a nap többi fájlját csak olvasd.
 
 ## 2. Adatok
 
@@ -42,13 +51,16 @@ node scripts/adat.mjs || echo "ADAT-LETÖLTÉS SIKERTELEN"
   - Az NQ=F a határidős ár, a TECH100 CFD néhány ponttal eltérhet tőle. A lejárat/roll hetében (következő: 2026-12-17) ezt külön jelezd.
 - **Ne commitold a `public/adat/` mappát.** Azt a GitHub Actions kezeli, és ütközne vele.
 
-## 3. Előkészítő elemzés (`elokeszito`)
+## 3. Teljes elemzés (`teljes`: `1-london` és `3-ny-elott`)
 
-Fájl: `content/elemzesek/<datum>-elokeszito.md`. Ha már létezik, írd felül.
+Fájl: a `fajl` útvonal. Ha már létezik, írd felül.
+
+- **`1-london` (09:00):** a nap első elemzése. Az Ázsia-session (01–08) már lezárult, a London most nyit. A forgatókönyvek és a trade terv a délutáni NY-ablakra (15:45–17:30) szólnak. Ez korai terv, ezért a döntés legfeljebb `VAN SETUP (feltételes: …)` vagy `FELTÉTELES TERV` lehet.
+- **`3-ny-elott` (15:15):** a nap **fő elemzése** a NY-ablakra. Olvasd el a mai `-1-london.md` és `-2-london-30.md` fájlt. A London-range (09–13) ekkor már kész, frissítsd a szinteket, a forgatókönyveket és a trade tervet a délelőtt történtek alapján, és írd le röviden, mi változott a reggeli elemzéshez képest.
 
 **Pontosan a `napi-elemzes-sablon.md` szerkezetét kövesd.** A szakaszcímek `## 0.` … `## 8.` legyenek, változatlan szöveggel, mert az oldal ezekből olvas. Kötelező formák:
 
-- Első sor: `# TECH100 napi elemzés – <datum>, <nap neve magyarul> (automatikus előkészítő)`.
+- Első sor: `# TECH100 napi elemzés – <datum>, <nap neve magyarul> (London nyitás)` vagy `(NY előtt)`.
 - Bevezető bekezdés: `Automatikus elemzés (Claude) · adat: NQ=F, Yahoo Finance, utolsó gyertya <HH:MM> (Budapest) · Ablak: **15:45–17:30** Budapest`. Ha óraátállítási eltolódás van, az ablakot a sablon szerint add meg (pl. `**14:45–16:30**`).
 - **0. Napi előszűrés:**
   - A táblázatot töltsd ki.
@@ -80,14 +92,17 @@ Fájl: `content/elemzesek/<datum>-elokeszito.md`. Ha már létezik, írd felül.
 - **8. Napló:** maradjon üres sablon-táblázat. Ezt a felhasználó tölti ki, **soha ne írj bele**.
 - **A végére** tegyél egy `## Figyeld` szakaszt 3–6 konkrét, áras listaelemmel. Mire figyeljen ma a felhasználó, pl. `- **31 495,0** érintése, utána 15M BoS felfelé záróárral → long terv`.
 
-## 4. Napközbeni frissítés (`frissites`)
+## 4. Frissítés (`frissites`: `2-london-30` és `4-ny-utan`)
 
-Fájl: `content/elemzesek/<datum>-frissites.md`. Minden futásnál írd felül teljesen. A mai `-elokeszito.md` fájlhoz **ne nyúlj**, csak olvasd.
+Fájl: a `fajl` útvonal. A nap korábbi fájljaihoz **ne nyúlj**, csak olvasd őket.
+
+- **`2-london-30` (09:30):** a `-1-london.md` frissítése a London első fél órája alapján. Sweepelte-e az Ázsia csúcsát vagy alját, volt-e BoS, változik-e a NY-ablakra szóló terv.
+- **`4-ny-utan` (16:00):** a `-3-ny-elott.md` frissítése a NY nyitás utáni fél óra alapján (az ablak 15:45-kor nyílt). Teljesült-e a belépési feltétel, volt-e 15M és 5M BoS záróárral, aktív-e még a terv, mire figyeljen a felhasználó az ablak hátralévő részében (17:30-ig).
 
 Szerkezet:
 
 ```markdown
-# TECH100 frissítés – <datum>, <HH:MM> (Budapest)
+# TECH100 frissítés – <datum>, <HH:MM> (London +30 / NY +30)
 
 Automatikus frissítés (Claude) · adat: NQ=F, utolsó gyertya <HH:MM> · Ablak: **15:45–17:30** Budapest
 
@@ -105,7 +120,7 @@ Automatikus frissítés (Claude) · adat: NQ=F, utolsó gyertya <HH:MM> · Ablak
 **C) …**
 
 ## 7. Döntés
-**VAN SETUP / NINCS SETUP / FELTÉTELES TERV** — mi változott az előkészítőhöz képest.
+**VAN SETUP / NINCS SETUP / FELTÉTELES TERV** — mi változott az előző elemzéshez képest.
 
 Riasztások beállítva: **…** (…), **…** (…)
 
@@ -113,9 +128,9 @@ Riasztások beállítva: **…** (…), **…** (…)
 - …
 ```
 
-Ha a trade terv változott (új entry, SL vagy TP), tegyél a frissítésbe is egy `## 5. Trade terv` táblázatot ugyanabban a formában, mint az előkészítőben. Ha nem változott, hagyd ki: a diagram ilyenkor az előkészítő tervét mutatja.
+Ha a trade terv változott (új entry, SL vagy TP), tegyél a frissítésbe is egy `## 5. Trade terv` táblázatot ugyanabban a formában, mint a teljes elemzésben. Ha nem változott, hagyd ki: a diagram ilyenkor a nap korábbi tervét mutatja.
 
-Az Előszűrés és a HTF bias az előkészítőből jön. Csak akkor változtasd meg, ha azóta új információ lett (pl. váratlan hír). Az ablak vége után (17:30) írd meg, hogy az ablak lezárult, és milyen a napi összkép.
+Az Előszűrés és a HTF bias az előző teljes elemzésből jön. Csak akkor változtasd meg, ha azóta új információ lett (pl. váratlan hír).
 
 ## 5. Ellenőrzés, commit, push
 
@@ -127,7 +142,7 @@ Ha az általad írt fájlra figyelmeztetés jön (pl. a „Döntés” vagy a �
 
 ```bash
 git add content/elemzesek/<a fájlod>.md
-git commit -m "elemzés: <datum> <HH:MM> <elokeszito|frissites>"
+git commit -m "elemzés: <datum> <HH:MM> <slot>"
 for i in 1 2 3; do git pull --rebase -q && git push -q && break; sleep 5; done
 ```
 

@@ -91,13 +91,17 @@ A build ettől nem bukik el. Egy rövid frissítő fájl, amelyből szándékosa
 
 ## Automatikus elemzés és diagram
 
-| Mi | Mikor | Hogyan |
-|---|---|---|
-| **Előkészítő elemzés** (Claude) | hétköznap a US cash nyitás előtt 15 perccel (Budapest 15:15, eltolódási héten 14:15) | ütemezett Claude-rutin, az `automatizalas/utasitas.md` alapján megírja a `<dátum>-elokeszito.md`-t, majd pushol |
-| **Frissítés** (Claude) | utána óránként kétszer (16:15, 17:15 Budapest) | felülírja a `<dátum>-frissites.md`-t (a napi oldalon a „Frissítés” fül) |
-| **Diagram-adat** (GitHub Actions) | 15 percenként 13–17 óra UTC között | `scripts/adat.mjs` letölti az NQ=F 5 perces és órás gyertyáit, kiszámolja a gépi szinteket, és újraépíti az oldalt |
+Hétköznaponként 4 automatikus elemzés készül (budapesti idő; az EU/US eltérő átállási hetén a NY-futások egy órával korábban):
 
-- **Időzítés:** a rutin óránként indul (UTC `15 13-16 * * 1-5`). Az indításkor a `scripts/idopont.mjs` a New York-i idő és a NYSE-ünnepnapok alapján dönt, így az óraátállítás automatikusan rendben van. A nem releváns időpontban az ágens azonnal kilép.
+| Futás | Időpont | Fájl (fül a napi oldalon) | Tartalom |
+|---|---|---|---|
+| London nyitás | 09:00 | `<dátum>-1-london.md` („London nyitás”) | teljes elemzés a sablon szerint, terv a NY-ablakra |
+| London +30 | 09:30 | `<dátum>-2-london-30.md` („London +30”) | frissítés: Ázsia-sweep, BoS, változik-e a terv |
+| NY előtt | 15:15 | `<dátum>-3-ny-elott.md` („NY előtt”) | **fő elemzés** a 15:45–17:30-as ablakra |
+| NY +30 | 16:00 | `<dátum>-4-ny-utan.md` („NY +30”) | frissítés: belépési feltétel, 15M/5M BoS, terv állapota |
+
+- **Diagram-adat (GitHub Actions):** 15 percenként 06–08 és 12–16 óra UTC között. A `scripts/adat.mjs` letölti az NQ=F gyertyákat, kiszámolja a gépi szinteket, és újraépíti az oldalt.
+- **Időzítés:** 3 Claude-rutin van (:00, :15, :30 percre), mindegyik a nyári és a téli időpontban is elindul. A `scripts/idopont.mjs` a londoni és a New York-i idő, valamint a NYSE-ünnepnapok alapján dönti el, kell-e dolgozni, így az óraátállítás automatikusan rendben van. A nem releváns indítás azonnal kilép.
 - **Az ágens viselkedése** az `automatizalas/utasitas.md` fájlban van. Ha módosítani akarsz rajta (pl. más formát, több figyelendőt), elég ezt átírni és pusholni, a rutinhoz nem kell nyúlni.
 - **Diagram:**
   - NQ=F (Nasdaq-100 határidős) 5M / 15M / 1H gyertyák, rajta az elemzés szintjei csoportszínekkel, a riasztások szaggatott vonallal, kérésre a gépi szintek (PDH, PDL, PWH, Ázsia, London, …), és az ablak jelölése.
