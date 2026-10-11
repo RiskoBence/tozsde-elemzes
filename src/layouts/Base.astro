@@ -1,0 +1,129 @@
+---
+import '../styles/global.css';
+import { utolsoFrissites } from '../lib/napok';
+import { datumHosszu, napNeve } from '../lib/format';
+import { url } from '../lib/url';
+
+interface Props {
+  title: string;
+  aktiv?: 'ma' | 'archivum' | 'sablon' | null;
+}
+
+const { title, aktiv = null } = Astro.props;
+const frissitve = await utolsoFrissites();
+const menu = [
+  { kulcs: 'ma', cim: 'Ma', href: url('/') },
+  { kulcs: 'archivum', cim: 'Archívum', href: url('/archivum/') },
+  { kulcs: 'sablon', cim: 'Sablon', href: url('/sablon/') },
+] as const;
+---
+
+<!doctype html>
+<html lang="hu" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content="Napi TECH100 (Nasdaq-100 CFD) price action elemzések, archívummal." />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#0a0d12" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TECH100" />
+    <link rel="manifest" href={url('/manifest.webmanifest')} />
+    <link rel="icon" href={url('/icon.svg')} type="image/svg+xml" />
+    <link rel="apple-touch-icon" href={url('/apple-touch-icon.png')} />
+    <script is:inline>
+      // Téma: a mentett választás, különben a rendszerbeállítás; ha az nem kér világosat, sötét.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem('tema'); } catch (e) {}
+        var sotet = t ? t === 'sotet' : !window.matchMedia('(prefers-color-scheme: light)').matches;
+        document.documentElement.classList.toggle('dark', sotet);
+      })();
+    </script>
+  </head>
+  <body class="min-h-dvh">
+    <a href="#tartalom" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-panel focus:px-3 focus:py-2">
+      Ugrás a tartalomra
+    </a>
+    <header class="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur supports-[backdrop-filter]:bg-bg/75">
+      <div class="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2">
+        <a href={url('/')} class="flex min-h-11 items-center gap-2 font-semibold tracking-tight">
+          <img src={url('/icon.svg')} alt="" width="24" height="24" class="hidden rounded-md sm:block" />
+          <span>TECH100<span class="hidden font-normal text-muted sm:inline"> napló</span></span>
+        </a>
+        <nav aria-label="Fő navigáció" class="ml-auto flex items-center">
+          {
+            menu.map((m) => (
+              <a
+                href={m.href}
+                aria-current={aktiv === m.kulcs ? 'page' : undefined}
+                class:list={[
+                  'flex min-h-11 items-center rounded-lg px-2 text-sm font-medium sm:px-3',
+                  aktiv === m.kulcs ? 'text-fg bg-panel-2' : 'text-muted hover:text-fg',
+                ]}
+              >
+                {m.cim}
+              </a>
+            ))
+          }
+          <button
+            id="tema-valto"
+            type="button"
+            class="ml-1 flex size-11 items-center justify-center rounded-lg text-muted hover:text-fg hover:bg-panel-2"
+            aria-label="Téma váltása (sötét / világos)"
+            title="Téma váltása"
+          >
+            <svg class="hidden size-5 dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+            <svg class="size-5 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+            </svg>
+          </button>
+        </nav>
+      </div>
+      {
+        frissitve && (
+          <p class="mx-auto max-w-3xl px-4 pb-1.5 text-xs text-muted">
+            Utoljára frissítve:{' '}
+            <time datetime={frissitve}>
+              {datumHosszu(frissitve)} ({napNeve(frissitve)})
+            </time>
+          </p>
+        )
+      }
+    </header>
+
+    <main id="tartalom" class="mx-auto max-w-3xl px-4 pb-10 pt-4">
+      <slot />
+    </main>
+
+    <div
+      id="masolas-uzenet"
+      role="status"
+      aria-live="polite"
+      class="pointer-events-none fixed inset-x-0 bottom-6 z-40 mx-auto w-max max-w-[90vw] rounded-full bg-fg px-4 py-2 text-sm font-medium text-bg opacity-0 transition-opacity"
+    >
+    </div>
+
+    <footer class="border-t border-line">
+      <p class="mx-auto max-w-3xl px-4 py-6 text-sm text-muted">
+        A döntés és a felelősség a tiéd. Ez elemzés, nem befektetési tanács, és nem ígér profitot.
+      </p>
+    </footer>
+
+    <script>
+      const gomb = document.getElementById('tema-valto');
+      gomb?.addEventListener('click', () => {
+        const sotet = !document.documentElement.classList.contains('dark');
+        document.documentElement.classList.toggle('dark', sotet);
+        try {
+          localStorage.setItem('tema', sotet ? 'sotet' : 'vilagos');
+        } catch {}
+      });
+    </script>
+  </body>
+</html>

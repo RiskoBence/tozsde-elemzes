@@ -1,0 +1,21 @@
+---
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import Base from '../layouts/Base.astro';
+import { renderMarkdown } from '../lib/markdown';
+
+// A repó gyökerében lévő sablon; a build mindig a projekt gyökeréből fut.
+let html = '';
+try {
+  html = renderMarkdown(readFileSync(resolve(process.cwd(), 'napi-elemzes-sablon.md'), 'utf8'));
+} catch {
+  html = '<p>A <code>napi-elemzes-sablon.md</code> nem található a repó gyökerében.</p>';
+}
+---
+
+<Base title="TECH100 – napi sablon" aktiv="sablon">
+  <p class="mb-3 text-sm text-muted">
+    Referencia: a napi elemzések ezt a szerkezetet követik (<code class="font-mono">napi-elemzes-sablon.md</code>).
+  </p>
+  <article class="card md" set:html={html} />
+</Base>

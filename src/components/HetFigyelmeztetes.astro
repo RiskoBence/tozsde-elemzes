@@ -1,0 +1,24 @@
+---
+interface Props {
+  elemek: string[];
+}
+const { elemek } = Astro.props;
+---
+
+{
+  elemek.length > 0 && (
+    <section aria-label="A hét többi napja" class="card border-warn-line bg-warn-bg">
+      <h2 class="flex items-center gap-2 font-semibold text-warn">
+        <span aria-hidden="true">⚠</span> A hét többi napja
+      </h2>
+      <ul class="mt-2 space-y-1.5 text-sm">
+        {elemek.map((e) => (
+          <li class:list={['flex gap-2', /NINCS\s+KERESKED/i.test(e) && 'font-semibold']}>
+            <span aria-hidden="true" class="text-warn">›</span>
+            <span set:html={e} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}

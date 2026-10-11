@@ -1,0 +1,36 @@
+---
+import type { Jelveny } from '../lib/parse-elemzes';
+
+interface Props {
+  jelveny: Jelveny | null;
+  /** Felirat, ha nincs adat. */
+  ures?: string;
+  meret?: 'kicsi' | 'nagy';
+}
+
+const { jelveny, ures = 'nincs adat', meret = 'kicsi' } = Astro.props;
+
+const stilus = {
+  zold: 'text-ok bg-ok-bg border-ok-line',
+  piros: 'text-bad bg-bad-bg border-bad-line',
+  sarga: 'text-warn bg-warn-bg border-warn-line',
+  semleges: 'text-fg bg-panel-2 border-line',
+} as const;
+const ikon = { zold: '✓', piros: '✕', sarga: '!', semleges: '•' } as const;
+const felteteles = !!jelveny && jelveny.tonus === 'sarga' && !/feltételes/i.test(jelveny.cimke);
+const meretOsztaly = meret === 'nagy' ? 'px-3.5 py-1.5 text-base' : 'px-2.5 py-0.5 text-xs';
+---
+
+{
+  jelveny ? (
+    <span class:list={['inline-flex max-w-full items-center gap-1.5 rounded-full border font-semibold tracking-wide', meretOsztaly, stilus[jelveny.tonus]]}>
+      <span aria-hidden="true">{ikon[jelveny.tonus]}</span>
+      <span>
+        {jelveny.cimke}
+        {felteteles && <span class="font-medium"> · feltételes</span>}
+      </span>
+    </span>
+  ) : (
+    <span class:list={['inline-flex items-center rounded-full border border-dashed border-line text-muted', meretOsztaly]}>{ures}</span>
+  )
+}

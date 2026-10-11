@@ -1,0 +1,41 @@
+---
+import type { ChecklistElem } from '../lib/parse-elemzes';
+
+interface Props {
+  elemek: ChecklistElem[];
+}
+const { elemek } = Astro.props;
+const kesz = elemek.filter((e) => e.kesz).length;
+---
+
+{
+  elemek.length > 0 && (
+    <section class="card" aria-label="Checklist">
+      <div class="flex items-baseline justify-between gap-2">
+        <h2 class="font-semibold">
+          Checklist
+        </h2>
+        <p class:list={['text-sm font-semibold', kesz === elemek.length ? 'text-ok' : 'text-muted']}>
+          {kesz} / {elemek.length} kész
+        </p>
+      </div>
+      <ul class="mt-3 space-y-2">
+        {elemek.map((e) => (
+          <li class="flex items-start gap-2.5 text-sm">
+            {e.kesz ? (
+              <span class="mt-px flex size-5 shrink-0 items-center justify-center rounded-md bg-ok text-xs font-bold text-bg" aria-hidden="true">
+                ✓
+              </span>
+            ) : (
+              <span class="mt-px size-5 shrink-0 rounded-md border-2 border-line" aria-hidden="true" />
+            )}
+            <span class:list={[!e.kesz && 'text-muted']}>
+              <span class="sr-only">{e.kesz ? 'Kész: ' : 'Nyitott: '}</span>
+              <Fragment set:html={e.html} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}

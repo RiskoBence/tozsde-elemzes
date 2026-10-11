@@ -1,0 +1,43 @@
+---
+import type { Forgatokonyv } from '../lib/parse-elemzes';
+
+interface Props {
+  lista: Forgatokonyv[];
+}
+const { lista } = Astro.props;
+
+const stilus: Record<string, { keret: string; betu: string }> = {
+  A: { keret: 'border-ok-line bg-ok-bg', betu: 'bg-ok text-bg' },
+  B: { keret: 'border-warn-line bg-warn-bg', betu: 'bg-warn text-bg' },
+};
+const alap = { keret: 'border-line bg-panel-2', betu: 'bg-muted text-bg' };
+---
+
+{
+  lista.length > 0 && (
+    <section aria-label="Forgatókönyvek">
+      <h2 class="mb-2 font-semibold">
+        Forgatókönyvek
+      </h2>
+      <div class="grid gap-3">
+        {lista.map((f) => {
+          const s = stilus[f.betu] ?? alap;
+          return (
+            <article class:list={['rounded-2xl border p-4', s.keret]}>
+              <h3 class="flex items-center gap-2.5 font-semibold">
+                <span class:list={['flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-bold', s.betu]} aria-hidden="true">
+                  {f.betu}
+                </span>
+                <span>
+                  <span class="sr-only">{f.betu}) </span>
+                  {f.cim}
+                </span>
+              </h3>
+              <div class="md mt-2 text-sm" set:html={f.html} />
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  )
+}

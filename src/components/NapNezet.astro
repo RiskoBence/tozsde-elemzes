@@ -1,0 +1,23 @@
+---
+import type { Elemzes } from '../lib/parse-elemzes';
+import Osszkep from './Osszkep.astro';
+import HetFigyelmeztetes from './HetFigyelmeztetes.astro';
+import Kulcsszintek from './Kulcsszintek.astro';
+import Forgatokonyvek from './Forgatokonyvek.astro';
+import Checklist from './Checklist.astro';
+import Szakaszok from './Szakaszok.astro';
+
+interface Props {
+  elemzes: Elemzes;
+}
+const { elemzes } = Astro.props;
+---
+
+<div class="grid grid-cols-1 gap-4">
+  <Osszkep elemzes={elemzes} />
+  <HetFigyelmeztetes elemek={elemzes.hetFigyelmeztetes} />
+  <Kulcsszintek szintek={elemzes.kulcsszintek} riasztasok={elemzes.riasztasok} />
+  <Forgatokonyvek lista={elemzes.forgatokonyvek} />
+  <Checklist elemek={elemzes.checklist} />
+  <Szakaszok elemzes={elemzes} />
+</div>

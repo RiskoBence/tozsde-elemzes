@@ -1,0 +1,52 @@
+---
+import type { Elemzes } from '../lib/parse-elemzes';
+import { datumHosszu, napNeve } from '../lib/format';
+import Jelveny from './Jelveny.astro';
+
+interface Props {
+  elemzes: Elemzes;
+}
+const { elemzes: e } = Astro.props;
+const cimke = 'text-xs font-medium uppercase tracking-wider text-muted';
+const dontesKeret = { zold: 'border-ok-line', piros: 'border-bad-line', sarga: 'border-warn-line', semleges: 'border-line' };
+---
+
+<section aria-labelledby={`osszkep-${e.id}`} class="grid grid-cols-2 gap-3">
+  <h2 id={`osszkep-${e.id}`} class="sr-only">Mai összkép</h2>
+
+  <div class="card col-span-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <p class="text-lg font-semibold">
+      <time datetime={e.datum}>{datumHosszu(e.datum)}</time>
+      {' '}<span class="font-normal text-muted">· {napNeve(e.datum)}</span>
+    </p>
+    <p class="text-sm text-muted">
+      Kereskedési ablak: <span class="font-mono font-semibold text-fg">{e.ablak}</span>{' '}
+      <span class="whitespace-nowrap">(Budapest)</span>
+    </p>
+  </div>
+
+  <div class:list={['card col-span-2 border-2', e.dontes ? dontesKeret[e.dontes.tonus] : 'border-line']}>
+    <p class={cimke}>Döntés</p>
+    <div class="mt-2">
+      <Jelveny jelveny={e.dontes} meret="nagy" ures="Nincs döntés rögzítve" />
+    </div>
+    {e.dontes?.reszlet && <p class="mt-2 text-sm font-medium">{e.dontes.reszlet}</p>}
+    {e.dontes?.indoklasHtml && <p class="mt-1 text-sm text-muted" set:html={e.dontes.indoklasHtml} />}
+  </div>
+
+  <div class="card">
+    <p class={cimke}>Előszűrés</p>
+    <div class="mt-2">
+      <Jelveny jelveny={e.eloszures} />
+    </div>
+    {e.eloszures?.reszlet && <p class="mt-2 text-sm text-muted">{e.eloszures.reszlet}</p>}
+  </div>
+
+  <div class="card">
+    <p class={cimke}>HTF bias</p>
+    <div class="mt-2">
+      <Jelveny jelveny={e.bias} />
+    </div>
+    {e.bias?.reszlet && !/^feltételes$/i.test(e.bias.reszlet) && <p class="mt-2 text-sm text-muted">{e.bias.reszlet}</p>}
+  </div>
+</section>

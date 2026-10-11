@@ -1,0 +1,97 @@
+---
+import Base from '../layouts/Base.astro';
+import Jelveny from '../components/Jelveny.astro';
+import { osszesNap } from '../lib/napok';
+import { datumHosszu, honapNeve, napNeve } from '../lib/format';
+import { url } from '../lib/url';
+
+const napok = await osszesNap();
+const honapok = [...new Set(napok.map((n) => n.datum.slice(0, 7)))];
+const vanFelteteles = napok.some((n) => n.fo.dontes?.kategoria === 'FELTETELES');
+const select =
+  'mt-1 block min-h-11 w-full rounded-xl border border-line bg-panel px-3 text-sm text-fg focus:border-accent';
+---
+
+<Base title="TECH100 – archívum" aktiv="archivum">
+  <h1 class="text-xl font-semibold">Archívum</h1>
+
+  {
+    napok.length === 0 ? (
+      <p class="mt-4 text-muted">Még nincs elemzés.</p>
+    ) : (
+      <>
+        <form class="mt-4 grid grid-cols-2 gap-3" aria-label="Szűrés" onsubmit="return false">
+          <label class="text-xs font-medium uppercase tracking-wider text-muted">
+            Hónap
+            <select id="szuro-honap" class={select}>
+              <option value="">Mind</option>
+              {honapok.map((h) => (
+                <option value={h}>{honapNeve(h)}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-xs font-medium uppercase tracking-wider text-muted">
+            Döntés
+            <select id="szuro-dontes" class={select}>
+              <option value="">Mind</option>
+              <option value="VAN">VAN SETUP</option>
+              <option value="NINCS">NINCS SETUP</option>
+              {vanFelteteles && <option value="FELTETELES">Feltételes terv</option>}
+            </select>
+          </label>
+        </form>
+
+        <p id="talalatok" class="mt-3 text-sm text-muted" aria-live="polite">
+          {napok.length} nap
+        </p>
+
+        <ul id="archiv-lista" class="mt-2 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-panel">
+          {napok.map((n) => (
+            <li data-honap={n.datum.slice(0, 7)} data-dontes={n.fo.dontes?.kategoria ?? ''}>
+              <a href={url(`/nap/${n.datum}/`)} class="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 hover:bg-panel-2">
+                <span class="min-w-0 flex-1 basis-40">
+                  <span class="block font-medium">{datumHosszu(n.datum)}</span>
+                  <span class="block text-xs text-muted">
+                    {napNeve(n.datum)}
+                    {n.elemzesek.length > 1 && ` · ${n.elemzesek.length} elemzés`}
+                  </span>
+                </span>
+                <span class="flex flex-wrap items-center gap-1.5">
+                  <Jelveny jelveny={n.fo.dontes} ures="nincs döntés" />
+                  <Jelveny jelveny={n.fo.eloszures} ures="nincs előszűrés" />
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p id="nincs-talalat" class="card mt-2 text-muted" hidden>
+          Nincs a szűrésnek megfelelő nap.
+        </p>
+      </>
+    )
+  }
+</Base>
+
+<script>
+  const honap = document.getElementById('szuro-honap') as HTMLSelectElement | null;
+  const dontes = document.getElementById('szuro-dontes') as HTMLSelectElement | null;
+  const sorok = [...document.querySelectorAll<HTMLLIElement>('#archiv-lista > li')];
+  const talalatok = document.getElementById('talalatok');
+  const nincs = document.getElementById('nincs-talalat');
+
+  function szur() {
+    let db = 0;
+    for (const sor of sorok) {
+      const lathato =
+        (!honap?.value || sor.dataset.honap === honap.value) && (!dontes?.value || sor.dataset.dontes === dontes.value);
+      sor.hidden = !lathato;
+      if (lathato) db++;
+    }
+    if (talalatok) talalatok.textContent = `${db} nap`;
+    if (nincs) nincs.hidden = db > 0;
+  }
+
+  honap?.addEventListener('change', szur);
+  dontes?.addEventListener('change', szur);
+  szur();
+</script>

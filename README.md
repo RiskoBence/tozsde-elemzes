@@ -1,0 +1,106 @@
+# TECH100 napi elemzés
+
+Statikus, mobilbarát oldal a napi Nasdaq-100 (TECH100 CFD) price action elemzésekhez. Az oldal Astro + Tailwind alapú, nincs backendje, és GitHub Pages-en fut.
+
+- `/`: a legfrissebb nap (összkép, kulcsszintek, forgatókönyvek, checklist, teljes szöveg)
+- `/archivum/`: az összes nap, hónapra és döntésre szűrhető
+- `/nap/YYYY-MM-DD/`: egy adott nap, előző / következő navigációval
+- `/sablon/`: a `napi-elemzes-sablon.md` referenciának
+
+## Helyi futtatás
+
+Node.js 22.12+ kell (ajánlott: 24).
+
+```bash
+npm install
+npm run dev       # http://localhost:4321/tozsde-elemzes/
+npm test          # parsoló-tesztek (Vitest)
+npm run build     # statikus build → dist/
+npm run preview   # a buildelt oldal helyben
+```
+
+## Új nap hozzáadása
+
+1. Tegyél egy új fájlt a `content/elemzesek/` mappába ilyen névvel: `YYYY-MM-DD-<valami>.md`, például `2026-10-13-elokeszito.md`.
+2. Commit + push a `main` ágra. Kb. 1–2 perc múlva frissül az oldal.
+
+Kódot ehhez nem kell módosítani.
+
+- **Több fájl egy naphoz** (pl. `-elokeszito` és `-frissites`): a napi oldalon fülekkel lehet váltani köztük. A fülek fájlnév szerint, ábécérendben követik egymást, és alapból az **utolsó** nyílik meg. Az archívum is ennek a fájlnak a jelvényeit mutatja.
+- **Frontmatter nem kell.** A dátum a fájlnévből jön, a cím az első `# ` sorból. Ha mégis írsz frontmattert, ezek a mezők felülírják a szövegből kiolvasott értéket:
+
+  ```yaml
+  ---
+  dontes: NINCS SETUP (CPI nap)
+  bias: SHORT
+  eloszures: PIROS
+  ablak: 14:45–16:30
+  ---
+  ```
+- Ha a fájlnév nem `YYYY-MM-DD-…` formájú, a build egy figyelmeztetéssel kihagyja, de nem törik el.
+
+### Mit olvas ki az oldal a markdownból?
+
+A parsoló a `src/lib/parse-elemzes.ts` fájlban van, és a sablon szerkezetét követi. Ha valamelyik rész hiányzik, csak az a blokk marad ki.
+
+| Blokk | Honnan |
+|---|---|
+| Előszűrés jelvény | `**Előszűrés: ZÖLD**` vagy `**Előszűrés eredménye:** PIROS (indok: …)` |
+| HTF bias | `**HTF bias: LONG (feltételes)**` |
+| Döntés | a `## 7. Döntés` szakasz első félkövér sora: `**VAN SETUP (…)**` / `**NINCS SETUP**` |
+| Kulcsszintek | a `## 2.` szakasz első táblázata (`Szint \| Ár \| Megjegyzés`) |
+| Szintek csoportja | ha egy ár az A forgatókönyv „Cél” sorában szerepel → célpont, ha az „Érvénytelen” sorában → érvénytelenítő; különben kulcsszó alapján (POI/FVG → POI) |
+| Riasztások | a „Javasolt riasztások” / „Riasztások beállítva” sorban **félkövérrel** írt árak |
+| A hét többi napja | az „A hét többi napja:” sort követő lista |
+| Forgatókönyvek | a `## 3.` szakaszban a `**A) …**`, `**B) …**`, `**C) …**` blokkok |
+| Checklist | `- [x]` / `- [ ]` sorok a `## 6.` szakaszból |
+| Kereskedési ablak | `Ablak: **15:45–17:30**`; ha nincs megadva: 15:45–17:30 |
+
+A szakaszokat a szám (`## 7.`) vagy a cím kulcsszava („Döntés”) alapján találja meg, így a kisebb címeltérések nem okoznak gondot. A kitöltetlen sablon-helyőrzőket (`ZÖLD / PIROS`) nem olvassa be értékként.
+
+Az árak pontosan úgy jelennek meg, ahogy a markdownban vannak (`31 616,5`). Másoláskor (ha egy árra koppintasz) a szóköz kimarad, így `31616,5` kerül a vágólapra. Ha a bróker tizedespontot vár, írd át a `src/components/Kulcsszintek.astro` fájlban a `masolhato` függvényt.
+
+> **A `content/elemzesek/` mappában lévő három fájl csak MINTA**, és a valódi elemzéseid formátumát próbálja utánozni. Ha az első valódi fájlod már bent van, ezeket töröld. A tesztek egy külön másolatot használnak (`tests/fixtures/`), így azok törlés után is futnak.
+
+## Deploy GitHub Pages-re (első beállítás)
+
+1. Hozz létre egy új repót a GitHubon **`tozsde-elemzes`** néven (lehet privát is, ha Pro/Team csomagod van; ingyenes fióknál a Pages csak publikus repóval megy).
+2. Töltsd fel a projektet (a mappában):
+   ```bash
+   git init -b main
+   git add .
+   git commit -m "Első verzió"
+   git remote add origin https://github.com/<felhasználónév>/tozsde-elemzes.git
+   git push -u origin main
+   ```
+3. A GitHubon a repóban: **Settings → Pages**.
+4. A **Build and deployment → Source** legyen **GitHub Actions** (nem „Deploy from a branch”).
+5. Az **Actions** fülön látszik a „Deploy GitHub Pages” futás. Ha lement, az oldal itt érhető el:
+   `https://<felhasználónév>.github.io/tozsde-elemzes/`
+6. Telefonon nyisd meg az oldalt, és válaszd a **Hozzáadás a kezdőképernyőhöz** lehetőséget (iOS: Megosztás menü, Android: Chrome menü).
+
+Ezután minden push a `main` ágra lefuttatja a teszteket, újraépíti és publikálja az oldalt. Kézzel is indítható az Actions fülön (Run workflow).
+
+**Más repónév vagy saját domain:** a workflow a Pages beállításból automatikusan veszi az alútvonalat, ezért a deployhoz nem kell semmit átírni. Helyben (`npm run dev`) az `astro.config.mjs` alapértéke, a `/tozsde-elemzes` érvényes. Ezt felülírhatod a `BASE_PATH` környezeti változóval.
+
+## Keresők kizárása
+
+Minden oldalon van `<meta name="robots" content="noindex, nofollow">`, és a buildbe bekerül egy `robots.txt` is (`Disallow: /`). Projekt-oldalnál (`…github.io/tozsde-elemzes/`) a keresők csak a domain gyökerében lévő `robots.txt`-t olvassák, ezért itt valójában a `noindex` meta a hatásos védelem. Ez minden oldalon benne van. Ne feledd: ha a repó publikus, a markdown fájlok a GitHubon bárki számára olvashatók.
+
+## Projektstruktúra
+
+```
+content/elemzesek/          napi elemzések (.md)
+napi-elemzes-sablon.md      a sablon (referencia, /sablon oldal)
+src/lib/parse-elemzes.ts    markdown → strukturált adat (jelvények, szintek, …)
+src/lib/markdown.ts         markdown → HTML (új lapon nyíló linkek, görgethető táblák)
+src/lib/napok.ts            fájlok napokba csoportosítása, rendezés
+src/components/             nézet-komponensek (összkép, kulcsszintek, fülek, …)
+src/pages/                  oldalak
+tests/                      Vitest tesztek + fixture
+.github/workflows/deploy.yml
+```
+
+---
+
+A döntés és a felelősség a tiéd. Ez elemzés, nem befektetési tanács, és nem ígér profitot.

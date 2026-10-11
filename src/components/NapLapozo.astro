@@ -1,0 +1,34 @@
+---
+import { datumRovid } from '../lib/format';
+import { url } from '../lib/url';
+
+interface Props {
+  elozo: string | null;
+  kovetkezo: string | null;
+}
+const { elozo, kovetkezo } = Astro.props;
+const gomb = 'flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-panel px-3 text-sm font-medium hover:border-accent';
+---
+
+<nav aria-label="Napok közötti lapozás" class="flex items-center justify-between gap-2">
+  {
+    elozo ? (
+      <a href={url(`/nap/${elozo}/`)} class={gomb} rel="prev">
+        <span aria-hidden="true">←</span> <span class="sr-only">Előző nap: </span>
+        {datumRovid(elozo)}
+      </a>
+    ) : (
+      <span />
+    )
+  }
+  {
+    kovetkezo ? (
+      <a href={url(`/nap/${kovetkezo}/`)} class={gomb} rel="next">
+        <span class="sr-only">Következő nap: </span>
+        {datumRovid(kovetkezo)} <span aria-hidden="true">→</span>
+      </a>
+    ) : (
+      <span />
+    )
+  }
+</nav>

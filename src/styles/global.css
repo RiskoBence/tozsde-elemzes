@@ -1,0 +1,142 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Világos téma (alap tokenek) */
+:root {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --panel-2: #eef0f3;
+  --line: #d9dde3;
+  --text: #11151b;
+  --muted: #545c68;
+  --accent: #1d4ed8;
+
+  --ok: #166534;
+  --ok-bg: #dcfce7;
+  --ok-line: #86efac;
+  --bad: #991b1b;
+  --bad-bg: #fee2e2;
+  --bad-line: #fca5a5;
+  --warn: #854d0e;
+  --warn-bg: #fef3c7;
+  --warn-line: #fcd34d;
+  --info: #1e40af;
+  --info-bg: #dbeafe;
+  --info-line: #93c5fd;
+  --poi: #6b21a8;
+  --poi-bg: #f3e8ff;
+  --poi-line: #d8b4fe;
+}
+
+/* Sötét téma (alapértelmezett, ha a rendszer nem kér világosat) */
+.dark {
+  color-scheme: dark;
+  --bg: #0a0d12;
+  --panel: #12161d;
+  --panel-2: #1a1f28;
+  --line: #262d38;
+  --text: #e6e9ee;
+  --muted: #9aa3b0;
+  --accent: #7aa7ff;
+
+  --ok: #4ade80;
+  --ok-bg: rgb(34 197 94 / 0.14);
+  --ok-line: rgb(74 222 128 / 0.45);
+  --bad: #f87171;
+  --bad-bg: rgb(239 68 68 / 0.14);
+  --bad-line: rgb(248 113 113 / 0.45);
+  --warn: #fbbf24;
+  --warn-bg: rgb(245 158 11 / 0.14);
+  --warn-line: rgb(251 191 36 / 0.45);
+  --info: #7cb4ff;
+  --info-bg: rgb(59 130 246 / 0.14);
+  --info-line: rgb(124 180 255 / 0.45);
+  --poi: #c4a1ff;
+  --poi-bg: rgb(168 85 247 / 0.15);
+  --poi-line: rgb(196 161 255 / 0.45);
+}
+
+@theme inline {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-line: var(--ok-line);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-bad-line: var(--bad-line);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-line: var(--warn-line);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-line: var(--info-line);
+  --color-poi: var(--poi);
+  --color-poi-bg: var(--poi-bg);
+  --color-poi-line: var(--poi-line);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    overflow-x: hidden;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* Kártya */
+@utility card {
+  @apply rounded-2xl border border-line bg-panel p-4 sm:p-5;
+}
+
+/* Markdownból renderelt szöveg */
+.md {
+  @apply text-[0.95rem] leading-relaxed;
+  overflow-wrap: anywhere;
+}
+.md > * + * { @apply mt-3; }
+.md h3 { @apply mt-5 text-base font-semibold; }
+.md h4 { @apply mt-4 font-semibold; }
+.md strong { @apply font-semibold; }
+.md a { @apply text-accent underline underline-offset-2; }
+.md ul { @apply list-disc pl-5; }
+.md ol { @apply list-decimal pl-5; }
+.md li + li { @apply mt-1; }
+.md li.task-list-item { @apply list-none -ml-5; }
+.md input[type='checkbox'] { @apply mr-2 align-middle accent-[var(--ok)]; }
+.md blockquote { @apply border-l-4 border-line pl-3 text-muted italic; }
+.md hr { @apply border-line; }
+.md code { @apply rounded bg-panel-2 px-1 py-0.5 font-mono text-[0.85em]; }
+.md p:empty { display: none; }
+
+.tabla-wrap {
+  @apply -mx-1 overflow-x-auto px-1;
+  -webkit-overflow-scrolling: touch;
+}
+.md table { @apply w-max min-w-full border-collapse text-sm; }
+.md th,
+.md td { @apply border border-line px-2.5 py-1.5 text-left align-top; }
+.md th { @apply bg-panel-2 font-semibold whitespace-nowrap; }
+.md td { min-width: 4.5rem; }
+
+/* Accordion */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary .nyil { transform: rotate(90deg); }

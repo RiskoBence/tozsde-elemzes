@@ -1,0 +1,33 @@
+---
+import type { GetStaticPaths } from 'astro';
+import Base from '../../layouts/Base.astro';
+import Nap from '../../components/Nap.astro';
+import NapLapozo from '../../components/NapLapozo.astro';
+import { osszesNap, type Nap as NapTipus } from '../../lib/napok';
+import { datumHosszu } from '../../lib/format';
+
+export const getStaticPaths = (async () => {
+  const napok = await osszesNap();
+  // A lista csökkenő sorrendű: i+1 = régebbi (előző), i-1 = újabb (következő).
+  return napok.map((nap, i) => ({
+    params: { datum: nap.datum },
+    props: { nap, elozo: napok[i + 1]?.datum ?? null, kovetkezo: napok[i - 1]?.datum ?? null },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  nap: NapTipus;
+  elozo: string | null;
+  kovetkezo: string | null;
+}
+const { nap, elozo, kovetkezo } = Astro.props;
+---
+
+<Base title={`TECH100 – ${datumHosszu(nap.datum)}`}>
+  <div class="grid grid-cols-1 gap-4">
+    <h1 class="sr-only">Elemzés: {datumHosszu(nap.datum)}</h1>
+    <NapLapozo elozo={elozo} kovetkezo={kovetkezo} />
+    <Nap nap={nap} />
+    <NapLapozo elozo={elozo} kovetkezo={kovetkezo} />
+  </div>
+</Base>

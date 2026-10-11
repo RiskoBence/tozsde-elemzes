@@ -1,0 +1,83 @@
+---
+import type { Nap } from '../lib/napok';
+import NapNezet from './NapNezet.astro';
+
+interface Props {
+  nap: Nap;
+}
+const { nap } = Astro.props;
+
+const ismert: Record<string, string> = {
+  elokeszito: 'Előkészítő',
+  frissites: 'Frissítés',
+  napkozbeni: 'Napközbeni',
+  napkozben: 'Napközben',
+  zaro: 'Záró',
+  naplo: 'Napló',
+  reggeli: 'Reggeli',
+};
+function fulNev(slug: string, i: number): string {
+  if (ismert[slug.toLowerCase()]) return ismert[slug.toLowerCase()];
+  if (!slug) return `${i + 1}. elemzés`;
+  const szoveg = slug.replace(/[-_]+/g, ' ');
+  return szoveg.charAt(0).toUpperCase() + szoveg.slice(1);
+}
+
+// Alapból a legfrissebb (fájlnév szerint utolsó) elemzés látszik.
+const aktivIndex = nap.elemzesek.length - 1;
+const tobb = nap.elemzesek.length > 1;
+---
+
+{
+  tobb ? (
+    <div data-fulek>
+      <div role="tablist" aria-label="Elemzések ezen a napon" class="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-line bg-panel p-1">
+        {nap.elemzesek.map((e, i) => (
+          <button
+            type="button"
+            role="tab"
+            id={`ful-${e.id}`}
+            aria-controls={`panel-${e.id}`}
+            aria-selected={i === aktivIndex ? 'true' : 'false'}
+            tabindex={i === aktivIndex ? 0 : -1}
+            class="min-h-11 flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-muted aria-selected:bg-panel-2 aria-selected:text-fg"
+          >
+            {fulNev(e.slug, i)}
+          </button>
+        ))}
+      </div>
+      {nap.elemzesek.map((e, i) => (
+        <div role="tabpanel" id={`panel-${e.id}`} aria-labelledby={`ful-${e.id}`} hidden={i !== aktivIndex}>
+          <NapNezet elemzes={e} />
+        </div>
+      ))}
+    </div>
+  ) : (
+    <NapNezet elemzes={nap.fo} />
+  )
+}
+
+<script>
+  for (const doboz of document.querySelectorAll<HTMLElement>('[data-fulek]')) {
+    const fulek = [...doboz.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const valt = (cel: HTMLButtonElement) => {
+      for (const f of fulek) {
+        const aktiv = f === cel;
+        f.setAttribute('aria-selected', String(aktiv));
+        f.tabIndex = aktiv ? 0 : -1;
+        const panel = document.getElementById(f.getAttribute('aria-controls') ?? '');
+        if (panel) panel.hidden = !aktiv;
+      }
+    };
+    fulek.forEach((f, i) => {
+      f.addEventListener('click', () => valt(f));
+      f.addEventListener('keydown', (ev) => {
+        const irany = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+        if (!irany) return;
+        const kov = fulek[(i + irany + fulek.length) % fulek.length];
+        valt(kov);
+        kov.focus();
+      });
+    });
+  }
+</script>

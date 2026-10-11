@@ -1,0 +1,43 @@
+---
+import type { Elemzes } from '../lib/parse-elemzes';
+
+interface Props {
+  elemzes: Elemzes;
+}
+const { elemzes: e } = Astro.props;
+const summary = 'flex min-h-12 cursor-pointer items-center gap-3 px-4 py-3 font-medium hover:bg-panel-2';
+---
+
+{
+  (e.szakaszok.length > 0 || e.bevezetoHtml) && (
+    <section aria-labelledby={`teljes-${e.id}`}>
+      <h2 id={`teljes-${e.id}`} class="mb-2 font-semibold">
+        Teljes elemzés
+      </h2>
+      <div class="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-panel">
+        {e.bevezetoHtml && (
+          <details>
+            <summary class={summary}>
+              <span class="nyil text-muted transition-transform" aria-hidden="true">
+                ▸
+              </span>
+              Bevezető, keretek
+            </summary>
+            <div class="md px-4 pb-4" set:html={e.bevezetoHtml} />
+          </details>
+        )}
+        {e.szakaszok.map((s) => (
+          <details>
+            <summary class={summary}>
+              <span class="nyil text-muted transition-transform" aria-hidden="true">
+                ▸
+              </span>
+              <span>{s.cim}</span>
+            </summary>
+            <div class="md px-4 pb-4" set:html={s.html} />
+          </details>
+        ))}
+      </div>
+    </section>
+  )
+}
