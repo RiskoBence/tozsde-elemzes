@@ -89,6 +89,23 @@ Ha egy szakasz megvan, de nem sikerült belőle kiolvasni a várt adatot (pl. a 
 
 A build ettől nem bukik el. Egy rövid frissítő fájl, amelyből szándékosan hiányoznak szakaszok, nem kap figyelmeztetést.
 
+## Automatikus elemzés és diagram
+
+| Mi | Mikor | Hogyan |
+|---|---|---|
+| **Előkészítő elemzés** (Claude) | hétköznap a US cash nyitás előtt 15 perccel (Budapest 15:15, eltolódási héten 14:15) | ütemezett Claude-rutin, az `automatizalas/utasitas.md` alapján megírja a `<dátum>-elokeszito.md`-t, majd pushol |
+| **Frissítés** (Claude) | utána óránként kétszer (16:15, 17:15 Budapest) | felülírja a `<dátum>-frissites.md`-t (a napi oldalon a „Frissítés” fül) |
+| **Diagram-adat** (GitHub Actions) | 15 percenként 13–17 óra UTC között | `scripts/adat.mjs` letölti az NQ=F 5 perces és órás gyertyáit, kiszámolja a gépi szinteket, és újraépíti az oldalt |
+
+- **Időzítés:** a rutin óránként indul (UTC `15 13-16 * * 1-5`). Az indításkor a `scripts/idopont.mjs` a New York-i idő és a NYSE-ünnepnapok alapján dönt, így az óraátállítás automatikusan rendben van. A nem releváns időpontban az ágens azonnal kilép.
+- **Az ágens viselkedése** az `automatizalas/utasitas.md` fájlban van. Ha módosítani akarsz rajta (pl. más formát, több figyelendőt), elég ezt átírni és pusholni, a rutinhoz nem kell nyúlni.
+- **Diagram:**
+  - NQ=F (Nasdaq-100 határidős) 5M / 15M / 1H gyertyák, rajta az elemzés szintjei csoportszínekkel, a riasztások szaggatott vonallal, kérésre a gépi szintek (PDH, PDL, PWH, Ázsia, London, …), és az ablak jelölése.
+  - Alatta az állapot: utolsó ár, a legközelebbi szint felette és alatta, a ma elért szintek, és a „Figyeld” lista.
+  - A TECH100 CFD néhány ponttal eltérhet az NQ=F-től.
+- **Az adat** a `public/adat/` mappába kerül. Ezt csak a GitHub Actions commitolja (`adat: NQ=F …` commitok). Napi pillanatkép is készül, így a régi napoknál is megmarad a diagram.
+- Ha valamelyik ütemezett futás elmarad (a GitHub cron 5–15 percet késhet), a következő pótolja.
+
 ## Deploy GitHub Pages-re (első beállítás)
 
 1. Hozz létre egy új repót a GitHubon **`tozsde-elemzes`** néven (lehet privát is, ha Pro/Team csomagod van; ingyenes fióknál a Pages csak publikus repóval megy).
@@ -125,6 +142,10 @@ src/lib/napok.ts            fájlok napokba csoportosítása, rendezés, build-f
 src/lib/statisztika.ts      napló-összesítés
 src/lib/meret.ts            méretkalkulátor (keretek: src/lib/beallitasok.ts)
 src/lib/ablak.ts            kereskedési ablak állapota budapesti idő szerint
+src/components/Diagram.astro  diagram (lightweight-charts) + állapot + Figyeld
+scripts/adat.mjs            NQ=F letöltés + gépi szintek → public/adat/
+scripts/idopont.mjs         az ágens időpont-kapuja (NY idő, NYSE-ünnepek)
+automatizalas/utasitas.md   az ütemezett Claude-ágens utasítása
 src/components/             nézet-komponensek (összkép, kulcsszintek, fülek, …)
 src/pages/                  oldalak
 tests/                      Vitest tesztek + fixture

@@ -104,6 +104,8 @@ export interface Elemzes {
   tradeTerv: TradeTerv | null;
   naplo: Trade[];
   erzelmiAllapot: string | null;
+  /** „## Figyeld” szakasz listaelemei (HTML) – mire kell figyelni ma. */
+  figyeld: string[];
   bevezetoHtml: string | null;
   szakaszok: Szakasz[];
   /** Szakaszok, amelyek megvannak, de nem sikerült belőlük kiolvasni a várt adatot. */
@@ -503,6 +505,14 @@ function naplo(md: string): Trade[] {
     });
 }
 
+function listaElemek(md: string): string[] {
+  return md
+    .split('\n')
+    .map((sor) => sor.match(/^\s*(?:[-*+]|\d+[.)])\s+(?!\[[ xX]\])(.+)$/)?.[1].trim())
+    .filter((e): e is string => !!e)
+    .map(renderInline);
+}
+
 function erzelmiAllapot(md: string): string | null {
   const m = md.match(/Érzelmi állapot[^:\n]*:\s*(.+)$/im);
   const v = m ? boldTorles(m[1]) : '';
@@ -534,6 +544,7 @@ export function parseElemzes(fajlnev: string, tartalom: string, frontmatter: Rec
   const sz6 = keresSzakasz(nyers, 6, /checklist|ellenőrzőlista/i);
   const sz7 = keresSzakasz(nyers, 7, /döntés/i);
   const sz8 = keresSzakasz(nyers, 8, /napló/i);
+  const szFigyeld = nyers.find((sz) => /figyeld|mit\s+kell\s+figyelni|figyelendő/i.test(sz.cim));
 
   const eloszuresSor =
     cimkesSor(sz0?.md ?? '', /Előszűrés(?:\s+eredménye)?/) ?? cimkesSor(teljes, /Előszűrés(?:\s+eredménye)?/);
@@ -563,6 +574,7 @@ export function parseElemzes(fajlnev: string, tartalom: string, frontmatter: Rec
     tradeTerv: sz5 ? tradeTerv(sz5.md) : null,
     naplo: sz8 ? naplo(sz8.md) : [],
     erzelmiAllapot: sz8 ? erzelmiAllapot(sz8.md) : null,
+    figyeld: szFigyeld ? listaElemek(szFigyeld.md) : [],
     bevezetoHtml: bevezeto ? renderMarkdown(bevezeto) : null,
     szakaszok: nyers.map((s) => ({ ...s, html: renderMarkdown(s.md) })),
   };

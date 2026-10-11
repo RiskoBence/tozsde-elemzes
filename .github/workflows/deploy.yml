@@ -3,10 +3,14 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
+  # Adatfrissítés 15 percenként a kereskedési ablak körül (UTC; nyári és téli időszámítást is lefedi).
+  # A GitHub ütemezése 5–15 percet késhet.
+  schedule:
+    - cron: '*/15 13-16 * * 1-5'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -29,6 +33,22 @@ jobs:
         uses: actions/configure-pages@v6
 
       - run: npm ci
+
+      - name: NQ=F adat letöltése (Yahoo Finance)
+        id: adat
+        continue-on-error: true
+        run: node scripts/adat.mjs
+
+      - name: Adat mentése a repóba (archívum + az ágensnek)
+        if: steps.adat.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/adat
+          if git diff --cached --quiet; then echo "Nincs változás."; exit 0; fi
+          git commit -q -m "adat: NQ=F $(date -u +'%Y-%m-%d %H:%M') UTC"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
+          echo "::warning::Az adat-commitot nem sikerült pusholni (a deploy ettől még lefut)."
 
       - name: Tesztek
         run: npm test

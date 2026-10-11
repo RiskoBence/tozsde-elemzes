@@ -65,6 +65,14 @@ describe('statisztika', () => {
   });
 });
 
+describe('Figyeld szakasz', () => {
+  it('listaelemek HTML-ként', () => {
+    const e = parseElemzes('2026-10-14-x.md', '## Figyeld\n\n- **31 495,0** érintése után 15M BoS\n1. CPI 14:30\n- [ ] ez checklist, nem kell')!;
+    expect(e.figyeld).toEqual(['<strong>31 495,0</strong> érintése után 15M BoS', 'CPI 14:30']);
+    expect(zaro.figyeld).toEqual([]);
+  });
+});
+
 describe('parse-ellenőrzés', () => {
   it('hibátlan fájlnál nincs figyelmeztetés', () => {
     expect(elokeszito.figyelmeztetesek).toEqual([]);

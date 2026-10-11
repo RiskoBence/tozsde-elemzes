@@ -1,0 +1,340 @@
+---
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Kulcsszint, Riasztas } from '../lib/parse-elemzes';
+import { url } from '../lib/url';
+
+interface Props {
+  azon: string;
+  datum: string;
+  ablak: string;
+  szintek: Kulcsszint[];
+  riasztasok: Riasztas[];
+  figyeld: string[];
+}
+const { azon, datum, ablak, szintek, riasztasok, figyeld } = Astro.props;
+
+// Csak akkor jelenik meg, ha az adatletöltő (scripts/adat.mjs) írt pillanatképet erre a napra.
+const vanAdat = existsSync(join(process.cwd(), 'public', 'adat', 'nap', `${datum}.json`));
+
+const elemzesSzintek = szintek.flatMap((s) =>
+  s.arak.map((ar) => ({ nev: s.szint, ar, csoport: s.csoport })),
+);
+const adatok = JSON.stringify({ szintek: elemzesSzintek, riasztasok, ablak, datum });
+const chip =
+  'min-h-9 rounded-lg border border-line px-2.5 text-xs font-medium text-muted aria-pressed:border-accent aria-pressed:bg-panel-2 aria-pressed:text-fg';
+---
+
+{
+  (vanAdat || figyeld.length > 0) && (
+    <section class="card" aria-label="Diagram és figyelendők" data-diagram={url(`/adat/nap/${datum}.json`)} data-adatok={adatok} data-van-adat={vanAdat ? '1' : ''}>
+      {vanAdat && (
+        <>
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="font-semibold">Diagram</h2>
+            <p class="text-xs text-muted" data-forras>
+              NQ=F (Nasdaq-100 határidős)
+            </p>
+          </div>
+
+          <div class="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Idősík">
+            {['5M', '15M', '1H'].map((tf, i) => (
+              <button type="button" class={chip} data-tf={tf} aria-pressed={i === 0 ? 'true' : 'false'}>
+                {tf}
+              </button>
+            ))}
+            <span class="mx-1 w-px self-stretch bg-line" aria-hidden="true" />
+            <button type="button" class={chip} data-reteg="elemzes" aria-pressed="true">
+              Elemzés szintjei
+            </button>
+            <button type="button" class={chip} data-reteg="gepi" aria-pressed="false">
+              Gépi szintek
+            </button>
+          </div>
+
+          <div class="relative mt-3 h-80 w-full overflow-hidden rounded-xl border border-line sm:h-96" data-vaszon>
+            <p class="absolute inset-0 flex items-center justify-center text-sm text-muted" data-tolt>
+              Diagram betöltése…
+            </p>
+          </div>
+
+          <dl class="mt-3 grid grid-cols-2 gap-2 text-sm" data-allapot hidden>
+            <div class="col-span-2 rounded-xl border border-line px-3 py-2">
+              <dt class="text-xs font-medium uppercase tracking-wider text-muted">Utolsó ár</dt>
+              <dd class="font-mono font-semibold" data-a="ar" />
+              <dd class="text-xs text-warn" data-a="keses" hidden />
+            </div>
+            <div class="rounded-xl border border-line px-3 py-2">
+              <dt class="text-xs font-medium uppercase tracking-wider text-muted">Felette</dt>
+              <dd data-a="felette" />
+            </div>
+            <div class="rounded-xl border border-line px-3 py-2">
+              <dt class="text-xs font-medium uppercase tracking-wider text-muted">Alatta</dt>
+              <dd data-a="alatta" />
+            </div>
+            <div class="col-span-2 rounded-xl border border-line px-3 py-2">
+              <dt class="text-xs font-medium uppercase tracking-wider text-muted">Ma elért szintek</dt>
+              <dd data-a="elert" class="text-muted" />
+            </div>
+          </dl>
+          <p class="mt-2 text-xs text-muted">
+            A TECH100 CFD néhány ponttal eltérhet az NQ=F-től (különösen a negyedéves lejárat/roll körül). Az adat ~15 percenként frissül, késhet.
+          </p>
+        </>
+      )}
+
+      {figyeld.length > 0 && (
+        <div class:list={[vanAdat && 'mt-4 border-t border-line pt-4']}>
+          <h2 class="flex items-center gap-2 font-semibold">
+            <span aria-hidden="true">👁</span> Figyeld
+          </h2>
+          <ul class="mt-2 space-y-1.5 text-sm">
+            {figyeld.map((f) => (
+              <li class="flex gap-2">
+                <span aria-hidden="true" class="text-accent">›</span>
+                <span set:html={f} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
+<script>
+  import { CandlestickSeries, ColorType, LineStyle, createChart, createSeriesMarkers, type IChartApi, type IPriceLine, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+  import { budapestiIdo, ablakAllapot } from '../lib/ablak';
+  import { huSzam } from '../lib/szam';
+
+  type Gyertya = [number, number, number, number, number];
+  interface Adat {
+    utolsoAr: number;
+    utolsoIdo: string;
+    datum: string;
+    szintek: { lista: { kulcs: string; nev: string; ar: number }[]; maiCash: { csucs: number; alj: number } | null };
+    g5: Gyertya[];
+    g1h: Gyertya[];
+  }
+  interface ElemzesAdatok {
+    szintek: { nev: string; ar: string; csoport: string }[];
+    riasztasok: { ar: string; cimke: string | null }[];
+    ablak: string;
+    datum: string;
+  }
+
+  const szam = (s: string) => Number(s.replace(/[\s  ]/g, '').replace(',', '.'));
+  const valtozo = (nev: string) => getComputedStyle(document.documentElement).getPropertyValue(nev).trim();
+
+  /** Unix mp → a budapesti falióra szerinti „hamis UTC” idő (a lightweight-charts UTC-ben rajzol). */
+  const ofszetek = new Map<number, number>();
+  function bp(t: number): UTCTimestamp {
+    const ora = Math.floor(t / 3600);
+    if (!ofszetek.has(ora)) {
+      const d = new Date(t * 1000);
+      const helyi = Date.parse(d.toLocaleString('en-US', { timeZone: 'Europe/Budapest' }));
+      const utc = Date.parse(d.toLocaleString('en-US', { timeZone: 'UTC' }));
+      ofszetek.set(ora, (helyi - utc) / 1000);
+    }
+    return (t + ofszetek.get(ora)!) as UTCTimestamp;
+  }
+
+  function osszevon(g: Gyertya[], perc: number): Gyertya[] {
+    const ki: Gyertya[] = [];
+    for (const x of g) {
+      const kezdet = Math.floor(x[0] / (perc * 60)) * perc * 60;
+      const utolso = ki.at(-1);
+      if (utolso && utolso[0] === kezdet) {
+        utolso[2] = Math.max(utolso[2], x[2]);
+        utolso[3] = Math.min(utolso[3], x[3]);
+        utolso[4] = x[4];
+      } else ki.push([kezdet, x[1], x[2], x[3], x[4]]);
+    }
+    return ki;
+  }
+
+  function percekOta(iso: string) {
+    return Math.round((Date.now() - Date.parse(iso)) / 60000);
+  }
+
+  async function inditas(doboz: HTMLElement) {
+    if (!doboz.dataset.vanAdat) return;
+    const vaszon = doboz.querySelector<HTMLElement>('[data-vaszon]')!;
+    const toltes = doboz.querySelector<HTMLElement>('[data-tolt]')!;
+    const e: ElemzesAdatok = JSON.parse(doboz.dataset.adatok ?? '{}');
+
+    let adat: Adat;
+    try {
+      const v = await fetch(doboz.dataset.diagram!, { cache: 'no-cache' });
+      if (!v.ok) throw new Error(String(v.status));
+      adat = await v.json();
+    } catch {
+      toltes.textContent = 'Az adat most nem érhető el.';
+      return;
+    }
+    toltes.remove();
+
+    let tf = '5M';
+    const retegek = { elemzes: e.szintek.length > 0, gepi: e.szintek.length === 0 };
+    doboz.querySelectorAll<HTMLButtonElement>('[data-reteg]').forEach((b) => b.setAttribute('aria-pressed', String(retegek[b.dataset.reteg as keyof typeof retegek])));
+    let chart: IChartApi | null = null;
+    let sorozat: ISeriesApi<'Candlestick'> | null = null;
+    let vonalak: IPriceLine[] = [];
+
+    const csoportSzin: Record<string, string> = { celpont: '--info', poi: '--poi', ervenytelenito: '--bad', egyeb: '--muted' };
+
+    function vonalakRajzol() {
+      if (!sorozat) return;
+      vonalak.forEach((v) => sorozat!.removePriceLine(v));
+      vonalak = [];
+      const elemzesArak: number[] = [];
+      if (retegek.elemzes) {
+        for (const s of e.szintek) {
+          const ar = szam(s.ar);
+          if (!Number.isFinite(ar)) continue;
+          elemzesArak.push(ar);
+          vonalak.push(
+            sorozat.createPriceLine({ price: ar, color: valtozo(csoportSzin[s.csoport] ?? '--muted'), lineWidth: 2, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: s.nev.slice(0, 22) }),
+          );
+        }
+        for (const r of e.riasztasok) {
+          const ar = szam(r.ar);
+          if (!Number.isFinite(ar)) continue;
+          vonalak.push(sorozat.createPriceLine({ price: ar, color: valtozo('--warn'), lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `🔔 ${r.cimke ?? ''}`.trim() }));
+        }
+      }
+      if (retegek.gepi) {
+        for (const s of adat.szintek.lista) {
+          if (retegek.elemzes && elemzesArak.some((a) => Math.abs(a - s.ar) < 3)) continue;
+          vonalak.push(sorozat.createPriceLine({ price: s.ar, color: valtozo('--muted'), lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: s.kulcs }));
+        }
+      }
+    }
+
+    function adatBetolt() {
+      if (!sorozat || !chart) return;
+      const nyers = tf === '1H' ? adat.g1h : tf === '15M' ? osszevon(adat.g5, 15) : adat.g5;
+      sorozat.setData(nyers.map(([t, o, h, l, c]) => ({ time: bp(t), open: o, high: h, low: l, close: c })));
+      // Ablak jelölése a kereskedési napon (5M/15M)
+      const [nyit, zar] = e.ablak.split(/\s*[–—-]\s*/);
+      const jelolok = [];
+      if (tf !== '1H' && nyit && zar) {
+        for (const [ido, felirat] of [[nyit, 'ablak'], [zar, 'vége']] as const) {
+          const [o, p] = ido.split(':').map(Number);
+          const cel = nyers.find((g) => {
+            const t = bp(g[0]);
+            const d = new Date(t * 1000);
+            return d.toISOString().slice(0, 10) === adat.datum && d.getUTCHours() * 60 + d.getUTCMinutes() >= o * 60 + p;
+          });
+          if (cel) jelolok.push({ time: bp(cel[0]), position: 'aboveBar' as const, color: valtozo('--accent'), shape: 'arrowDown' as const, text: felirat });
+        }
+      }
+      createSeriesMarkers(sorozat, jelolok);
+      const db = tf === '1H' ? 120 : tf === '15M' ? 96 : 160;
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, nyers.length - db), to: nyers.length + 3 });
+    }
+
+    function rajzol() {
+      chart?.remove();
+      chart = createChart(vaszon, {
+        autoSize: true,
+        layout: { background: { type: ColorType.Solid, color: valtozo('--panel') }, textColor: valtozo('--muted'), fontSize: 11, attributionLogo: true },
+        grid: { vertLines: { color: valtozo('--line') }, horzLines: { color: valtozo('--line') } },
+        rightPriceScale: { borderColor: valtozo('--line') },
+        timeScale: { borderColor: valtozo('--line'), timeVisible: true, secondsVisible: false },
+        localization: { locale: 'hu-HU', priceFormatter: (p: number) => huSzam(p, 1) },
+        crosshair: { mode: 0 },
+      });
+      sorozat = chart.addSeries(CandlestickSeries, {
+        upColor: valtozo('--ok'),
+        downColor: valtozo('--bad'),
+        wickUpColor: valtozo('--ok'),
+        wickDownColor: valtozo('--bad'),
+        borderVisible: false,
+        priceLineVisible: true,
+      });
+      vonalak = [];
+      adatBetolt();
+      vonalakRajzol();
+    }
+
+    rajzol();
+    // Témaváltáskor újrarajzolás az új színekkel
+    new MutationObserver(rajzol).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    doboz.querySelectorAll<HTMLButtonElement>('[data-tf]').forEach((b) =>
+      b.addEventListener('click', () => {
+        tf = b.dataset.tf!;
+        doboz.querySelectorAll('[data-tf]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        adatBetolt();
+      }),
+    );
+    doboz.querySelectorAll<HTMLButtonElement>('[data-reteg]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const k = b.dataset.reteg as keyof typeof retegek;
+        retegek[k] = !retegek[k];
+        b.setAttribute('aria-pressed', String(retegek[k]));
+        vonalakRajzol();
+      }),
+    );
+
+    // --- Állapot ---
+    const allapot = doboz.querySelector<HTMLElement>('[data-allapot]')!;
+    const a = (k: string) => allapot.querySelector<HTMLElement>(`[data-a="${k}"]`)!;
+    const ar = adat.utolsoAr;
+    const ido = new Date(adat.utolsoIdo).toLocaleTimeString('hu-HU', { timeZone: 'Europe/Budapest', hour: '2-digit', minute: '2-digit' });
+    a('ar').textContent = `${huSzam(ar, 2)} · ${ido}`;
+
+    const most = budapestiIdo();
+    const kor = percekOta(adat.utolsoIdo);
+    const ablakNyitva = most.datum === adat.datum && ablakAllapot(most, e.ablak)?.tipus === 'nyitva';
+    if (ablakNyitva && kor > 30) {
+      a('keses').textContent = `Az adat ${kor} perces – lehet, hogy késik a frissítés.`;
+      a('keses').hidden = false;
+    }
+
+    const minden = [
+      ...e.szintek.map((s) => ({ nev: s.nev, ar: szam(s.ar) })),
+      ...(e.szintek.length ? [] : adat.szintek.lista.map((s) => ({ nev: s.nev, ar: s.ar }))),
+    ].filter((s) => Number.isFinite(s.ar));
+    const felette = minden.filter((s) => s.ar > ar).sort((x, y) => x.ar - y.ar)[0];
+    const alatta = minden.filter((s) => s.ar < ar).sort((x, y) => y.ar - x.ar)[0];
+    const leiras = (s?: { nev: string; ar: number }) =>
+      s ? `<span class="font-mono font-semibold">${huSzam(s.ar, 1)}</span> <span class="text-xs text-muted">(${huSzam(s.ar - ar, 1, true)} pt)</span><br><span class="text-xs">${s.nev}</span>` : '<span class="text-muted">–</span>';
+    a('felette').innerHTML = leiras(felette);
+    a('alatta').innerHTML = leiras(alatta);
+
+    // Ma elért szintek: a kereskedési nap budapesti 00:00 óta mért tartományán belül
+    const ma = adat.g5.filter((g) => new Date(bp(g[0]) * 1000).toISOString().slice(0, 10) === adat.datum);
+    if (ma.length) {
+      const csucs = Math.max(...ma.map((g) => g[2]));
+      const alj = Math.min(...ma.map((g) => g[3]));
+      const elert = [...new Set(minden.filter((s) => s.ar <= csucs && s.ar >= alj).map((s) => s.nev))];
+      a('elert').textContent = elert.length ? elert.map((n) => `✓ ${n}`).join(' · ') : 'Még egyik sem.';
+    } else a('elert').textContent = 'Nincs mai adat.';
+    allapot.hidden = false;
+
+    // A „Jelenlegi ár” mező kitöltése, ha üres és ez a mai nap
+    if (most.datum === adat.datum) {
+      for (const mezo of document.querySelectorAll<HTMLInputElement>('[data-jelenlegi-ar]')) {
+        if (!mezo.value) {
+          mezo.value = huSzam(ar, 1);
+          mezo.dispatchEvent(new Event('input'));
+        }
+      }
+    }
+  }
+
+  // A fülek miatt a rejtett panelekben lévő diagramot csak láthatóvá váláskor indítjuk.
+  const indult = new WeakSet<HTMLElement>();
+  const figyelo = new IntersectionObserver((bejegyzesek) => {
+    for (const b of bejegyzesek) {
+      const el = b.target as HTMLElement;
+      if (b.isIntersecting && !indult.has(el)) {
+        indult.add(el);
+        void inditas(el);
+      }
+    }
+  });
+  document.querySelectorAll<HTMLElement>('[data-diagram]').forEach((d) => figyelo.observe(d));
+</script>
